@@ -13,13 +13,15 @@ class IntensityEstimator:
         self.kappa = 2
         self.alpha = 2
 
-    def estimate_intensity(self, new_trades):
+    def update_trades(self, new_trades):
         for trade, amount in new_trades:
             if trade in self.trades:
                 self.trades[trade] += amount
             else:
                 self.trades[trade] = amount
 
+    def estimate_intensity(self, new_trades):
+        self.update_trades(new_trades)
         price_levels = np.array(list(self.trades.keys()))
         price_levels.sort()
         price_levels = price_levels[:: -len(price_levels)]
@@ -40,7 +42,8 @@ class IntensityEstimator:
         self.alpha = param[0]
         self.kappa = param[1]
 
-        if self.alpha < 0:
+        if self.alpha <= 0:
             self.alpha = 1
-        if self.kappa < 0:
+        if self.kappa <= 0:
             self.kappa = 1
+            print(self.trades)

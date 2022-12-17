@@ -10,16 +10,22 @@ def test_read_line_trades():
         "/home/juuso/Documents/gradu/parsed_data/trades/ADAUSDT-trades-2021-12-21.csv",
         "r",
     ) as f:
+        previous_time = 0
+        aggregation = 100
         while True:
             n += 1
-            if n > 1000:
-                break
+            # if n > 1000:
+            #     break
             line = f.readline().rstrip().split(",")
             price = float(line[1])
             amount = float(line[2])
             time = int(line[4])
-            estimator.estimate_intensity([(price, amount)])
-            print(estimator.alpha, estimator.kappa)
+            if time >= previous_time + aggregation:
+                estimator.estimate_intensity([(price, amount)])
+                print(time, estimator.alpha, estimator.kappa)
+                previous_time = time
+            else:
+                estimator.update_trades([(price, amount)])
 
 
 def test_estimate():
