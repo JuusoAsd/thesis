@@ -2,7 +2,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 
 
-def curve_func(a, b, t):
+def curve_func(t, a, b):
     return a * np.exp(-b * t)
 
 
