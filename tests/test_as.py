@@ -1,31 +1,60 @@
+import logging
 import numpy as np
 from scipy.optimize import curve_fit
 from csv_parser.AS.intensity import IntensityEstimator, curve_func
 
 
-def test_read_line_trades():
-    estimator = IntensityEstimator()
+def test_read_line_trades(caplog):
+    caplog.set_level(logging.INFO)
+
     n = 0
     with open(
         "/home/juuso/Documents/gradu/parsed_data/trades/ADAUSDT-trades-2021-12-21.csv",
         "r",
     ) as f:
+        main_estimator = IntensityEstimator()
+        secondary_estimator = IntensityEstimator()
+
         previous_time = 0
-        aggregation = 100
+        lookback_start = 0
+
+        # setting parameters, everything is in milliseconds:
+        # record_interval, how many timestamps between each recorded value
+        # lookback, how many timestamps to look back when estimating intensity
+        # TODO: Smoothing? is there some moving average parameter? This should probably be done later...
+        record_interval = 100
+        lookback = 5_000_000
+        lookback_half = lookback / 2
+
+        # we start by updating main estimator with trades and recording the value every record_interval
+        # after lookback_half, we also start updating secondary estimator with the same trades
+        # after lookback, we set the secondary as main and reset secondary
         while True:
             n += 1
-            # if n > 1000:
-            #     break
             line = f.readline().rstrip().split(",")
             price = float(line[1])
             amount = float(line[2])
             time = int(line[4])
-            if time >= previous_time + aggregation:
-                estimator.estimate_intensity([(price, amount)])
-                print(time, estimator.alpha, estimator.kappa)
+            if lookback_start == 0:
+                lookback_start = time
+
+            if time >= previous_time + record_interval:
+                main_estimator.estimate_intensity([(price, amount)])
+                print(time, main_estimator.alpha, main_estimator.kappa)
                 previous_time = time
             else:
-                estimator.update_trades([(price, amount)])
+                main_estimator.update_trades([(price, amount)])
+
+            if time >= lookback_start + lookback_half:
+                secondary_estimator.update_trades([(price, amount)])
+
+            if time >= lookback_start + lookback:
+                logging.info(
+                    f"Switching estimators at {time} with {main_estimator.trade_count} trades"
+                )
+                main_estimator = secondary_estimator
+                secondary_estimator = IntensityEstimator()
+                lookback_start = time
 
 
 def test_estimate():

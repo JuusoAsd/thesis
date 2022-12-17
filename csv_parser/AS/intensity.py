@@ -12,9 +12,11 @@ class IntensityEstimator:
         self.trades = {}
         self.kappa = 2
         self.alpha = 2
+        self.trade_count = 0
 
     def update_trades(self, new_trades):
         for trade, amount in new_trades:
+            self.trade_count += 1
             if trade in self.trades:
                 self.trades[trade] += amount
             else:
@@ -46,4 +48,3 @@ class IntensityEstimator:
             self.alpha = 1
         if self.kappa <= 0:
             self.kappa = 1
-            print(self.trades)
