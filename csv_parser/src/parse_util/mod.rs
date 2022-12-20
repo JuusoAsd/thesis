@@ -1,29 +1,27 @@
-use std::collections::{BTreeMap, HashMap};
-use std::fs;
-use std::fs::File;
-use std::path::PathBuf;
-use std::time::SystemTime;
-
 use csv::Writer;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap};
+use std::fs::File;
+use std::path::PathBuf;
+use std::time::SystemTime;
 
-use super::file_util::get_file_date;
+use super::file_util::{get_file_date, ASRecord, FileHandler};
 use super::orderbook_util::{Orderbook, OrderbookLevel, OrderbookLevelPartial};
 
 #[derive(Debug, Deserialize)]
-struct UpdateRecord {
+pub struct UpdateRecord {
     symbol: String,
-    timestamp: i64,
+    pub timestamp: i64,
     #[serde(skip_deserializing)]
     first_update_id: i64,
     #[serde(skip_deserializing)]
     last_update_id: i64,
-    side: Side,
+    pub side: Side,
     update_type: String,
-    price: Decimal,
-    qty: Decimal,
+    pub price: Decimal,
+    pub qty: Decimal,
     pu: i64,
 }
 
@@ -39,6 +37,17 @@ struct SnapRecord {
     qty: Decimal,
     #[serde(skip_deserializing)]
     pu: i8,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TradeRecord {
+    // 557767490,1.2797,832.0,1064.7104,1640131009832,true
+    trade_id: i64,
+    price: Decimal,
+    qty: Decimal,
+    total_value: Decimal,
+    timestamp: i64,
+    is_buyer_maker: bool,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Serialize, Copy, Clone, Eq, Hash)]
@@ -290,166 +299,6 @@ fn compare_orderbooks(start: Orderbook, end: Orderbook, timestamp: i64) -> Vec<O
     update_vec
 }
 
-// pub fn parse_updates_v3(
-//     update_path: &str,
-//     start_timestamp: i64,
-//     end_timestamp: i64,
-//     tracked_levels: i64,
-//     timestamp_aggregation: i64,
-//     mut orderbook: Orderbook,
-//     mut writer: Writer<File>,
-// ) -> Orderbook {
-//     let mut update_count = 0;
-//     let mut record_start_timestamp = 0;
-//     let start_time = SystemTime::now();
-
-//     let mut rdr = csv::Reader::from_path(update_path).unwrap();
-//     let mut partial_orderbook = orderbook.get_partial_orderbook(tracked_levels);
-//     // Iterate over lines to find non-duplicate updates for each timestamp
-//     for result in rdr.deserialize() {
-//         let record: UpdateRecord = match result {
-//             Ok(r) => r,
-//             Err(e) => {
-//                 println!("Error reading update: {}", e);
-//                 continue;
-//             }
-//         };
-//         // only allow valid timestamps that fit within the range
-//         if (record.timestamp > start_timestamp) & (record.timestamp < end_timestamp) {
-//             update_count += 1;
-//             if update_count % 1_000_000 == 0 {
-//                 println!(
-//                     "Processed {} updates in {} seconds",
-//                     update_count,
-//                     start_time.elapsed().unwrap().as_secs()
-//                 );
-//             }
-//             let level = OrderbookLevel {
-//                 timestamp: record.timestamp,
-//                 side: record.side,
-//                 size: record.qty,
-//                 price: record.price,
-//             };
-
-//             if record_start_timestamp == 0 {
-//                 record_start_timestamp = record.timestamp;
-
-//             // When reach new timestamp, parse current update set
-//             } else if (record_start_timestamp + timestamp_aggregation) <= record.timestamp {
-//                 let mut updates = compare_orderbooks(
-//                     partial_orderbook,
-//                     orderbook.get_partial_orderbook(tracked_levels),
-//                     record.timestamp,
-//                 );
-//                 for update in updates {
-//                     writer.serialize(update).unwrap();
-//                 }
-//                 record_start_timestamp = record.timestamp;
-//                 partial_orderbook = orderbook.get_partial_orderbook(tracked_levels);
-//             } else {
-//                 match record.side {
-//                     Side::Ask => {
-//                         if level.size == dec!(0) {
-//                             // remove if zero
-//                             orderbook.asks.remove(&level.price);
-//                         } else {
-//                             // update if not zero
-//                             orderbook.asks.insert(level.price, level);
-//                         }
-//                     }
-//                     Side::Bid => {
-//                         if level.size == dec!(0) {
-//                             orderbook.bids.remove(&level.price);
-//                         } else {
-//                             orderbook.bids.insert(level.price, level);
-//                         }
-//                     }
-//                 };
-//             }
-//         } else if record.timestamp > end_timestamp {
-//             break;
-//         }
-//     }
-//     orderbook
-// }
-
-// pub fn parse_updates_snapshot(
-//     update_path: &str,
-//     start_timestamp: i64,
-//     end_timestamp: i64,
-//     tracked_levels: i64,
-//     timestamp_aggregation: i64,
-//     mut orderbook: Orderbook,
-//     mut writer: Writer<File>,
-// ) -> Orderbook {
-//     // Baseline snapshot parsing.
-//     // From stream of updates, track the current state in memory.
-//     // every timestamp_aggregation, record the current state for best "tracked_levels" count of bid and ask
-//     // TODO: timestamps might have gaps, even with varying timestamps, recording state should happen at a constant interval
-//     //  - example: for data with timestamps from 0 to 10_000, with timestamp_aggregation of 10, should have 1_000 recordings
-//     let mut update_count = 0;
-//     let mut record_start_timestamp = 0;
-//     let start_time = SystemTime::now();
-//     let mut rdr = csv::Reader::from_path(update_path).unwrap();
-//     for result in rdr.deserialize() {
-//         let record: UpdateRecord = match result {
-//             Ok(r) => r,
-//             Err(e) => {
-//                 println!("Error reading update: {}", e);
-//                 continue;
-//             }
-//         };
-//         // only allow valid timestamps that fit within the range
-//         if (record.timestamp > start_timestamp) & (record.timestamp < end_timestamp) {
-//             update_count += 1;
-//             if update_count % 1_000_000 == 0 {
-//                 println!(
-//                     "Processed {} updates in {} seconds",
-//                     update_count,
-//                     start_time.elapsed().unwrap().as_secs()
-//                 );
-//             }
-//             let level = OrderbookLevel {
-//                 timestamp: record.timestamp,
-//                 side: record.side,
-//                 size: record.qty,
-//                 price: record.price,
-//             };
-
-//             if record_start_timestamp == 0 {
-//                 record_start_timestamp = record.timestamp;
-
-//             // When reach a timestamp after aggregation window, write current snapshot of orderbook
-//             } else if (record_start_timestamp + timestamp_aggregation) <= record.timestamp {
-//                 writer = orderbook.write_full_snapshot(writer, tracked_levels, record.timestamp);
-//                 record_start_timestamp = record.timestamp;
-//             } else {
-//                 match record.side {
-//                     Side::Ask => {
-//                         if level.size == dec!(0) {
-//                             // remove if zero
-//                             orderbook.asks.remove(&level.price);
-//                         } else {
-//                             // update if not zero
-//                             orderbook.asks.insert(level.price, level);
-//                         }
-//                     }
-//                     Side::Bid => {
-//                         if level.size == dec!(0) {
-//                             orderbook.bids.remove(&level.price);
-//                         } else {
-//                             orderbook.bids.insert(level.price, level);
-//                         }
-//                     }
-//                 };
-//             }
-//         } else if record.timestamp > end_timestamp {
-//             break;
-//         }
-//     }
-//     orderbook
-// }
-
 pub fn parse_updates_v2(
     start_timestamp: i64,
     end_timestamp: i64,
@@ -528,6 +377,120 @@ pub fn parse_updates_v2(
                     record_start_timestamp = record.timestamp;
                 }
             }
+        }
+    }
+}
+
+pub fn parse_records_avellaneda_stoikov(
+    start_timestamp: i64,
+    end_timestamp: i64,
+    aggregation_interval: i64,
+    target_path: &PathBuf,
+    mut update_iter: FileHandler,
+    mut trade_iter: FileHandler,
+    mut orderbook: Orderbook,
+) {
+    // this function parses the raw data to be directly useable with avellaneda stoikov -model
+    // key components:
+    //  1) timestamp
+    //  2) Current midprice based on best bid and ask price from orderbook
+    //  3, 4) if a trade happemed, the price and size of the trade
+
+    // params:
+    //  - start state for orderbook
+    //  - start timestamp
+    //  - end timestamp
+    //  - aggregation interval (how often midprice is recorded IF no trades happen)
+    //  - target_path: where to write the parsed data
+    //  - update_paths: where to read the raw OB updates from
+    //  - trade_paths: where to read the raw trade data from
+
+    // NOTE: If orderbook and trade happen at same timestamp, the trade is recorded first and previous orderbook update is used
+
+    // initialze file handler for writing parsed data
+    let mut writer = csv::Writer::from_path(target_path).unwrap();
+    let mut previous_timestamp = start_timestamp;
+
+    // start by moving update and trade iterators to start timestamp
+    let mut update_record: UpdateRecord = loop {
+        let update_record: UpdateRecord = match update_iter.next() {
+            Some(r) => update_iter.deserialize_value(&r),
+            None => panic!("No updates found in update file for start timestamp"),
+        };
+        if update_record.timestamp >= start_timestamp {
+            break update_record;
+        }
+    };
+
+    let mut trade_record: TradeRecord = loop {
+        let trade_record: TradeRecord = match trade_iter.next() {
+            Some(r) => trade_iter.deserialize_value(&r),
+            None => panic!("No trades found in trade file for start timestamp"),
+        };
+        if trade_record.timestamp >= start_timestamp {
+            break trade_record;
+        }
+    };
+
+    let mut recorded_data = ASRecord::new(
+        previous_timestamp,
+        orderbook.get_midprice(),
+        dec!(0),
+        dec!(0),
+        dec!(0),
+        Side::Ask,
+    );
+
+    // // start looping updates and trades
+    loop {
+        if update_record.timestamp < trade_record.timestamp {
+            // always update orderbook state with latest
+            orderbook.update_parse_record(&update_record);
+
+            if update_record.timestamp >= previous_timestamp + aggregation_interval {
+                // record values to csv here, use dummy trade with ask side and 0 size as no trade happened
+                let mut best_bid = orderbook.get_nth_bid(0).unwrap().price;
+                let mut best_ask = orderbook.get_nth_ask(0).unwrap().price;
+                recorded_data = ASRecord::new(
+                    update_record.timestamp,
+                    (best_bid + best_ask) / dec!(2),
+                    best_bid,
+                    best_ask,
+                    dec!(0),
+                    Side::Ask,
+                );
+                writer.serialize(recorded_data).unwrap();
+                previous_timestamp = update_record.timestamp;
+            }
+
+            update_record = match update_iter.next() {
+                Some(r) => update_iter.deserialize_value(&r),
+                None => break,
+            };
+        }
+        if update_record.timestamp >= trade_record.timestamp {
+            // record values to csv here, update previous timestamp
+            let mut best_bid = orderbook.get_nth_bid(0).unwrap().price;
+            let mut best_ask = orderbook.get_nth_ask(0).unwrap().price;
+            recorded_data = ASRecord::new(
+                trade_record.timestamp,
+                (best_bid + best_ask) / dec!(2),
+                best_bid,
+                best_ask,
+                trade_record.qty,
+                Side::Ask,
+            );
+            writer.serialize(recorded_data).unwrap();
+            previous_timestamp = trade_record.timestamp;
+
+            trade_record = match trade_iter.next() {
+                Some(r) => trade_iter.deserialize_value(&r),
+                None => break,
+            };
+        }
+
+        if update_record.timestamp >= end_timestamp {
+            break;
         }
     }
 }
