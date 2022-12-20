@@ -106,8 +106,8 @@ fn parse_data_AS() {
         (update_files, trade_files)
     };
 
-    let mut update_handler: FileHandler = FileHandler::new(update_files_used, update_headers);
-    let mut trade_handler: FileHandler = FileHandler::new(trade_files_used, trade_header);
+    let mut update_handler: FileHandler = FileHandler::new(update_files_used, update_headers, true);
+    let mut trade_handler: FileHandler = FileHandler::new(trade_files_used, trade_header, false);
     parse_records_avellaneda_stoikov(
         first_ts,
         i64::MAX,
@@ -117,6 +117,22 @@ fn parse_data_AS() {
         trade_handler,
         ob,
     )
+}
+
+fn test_filehandler() {
+    let headers = StringRecord::from(vec!["one", "two", "three"]);
+    let files = vec![
+        PathBuf::from("/home/juuso/Documents/gradu/tests/test_csv/test1.csv"),
+        PathBuf::from("/home/juuso/Documents/gradu/tests/test_csv/test2.csv"),
+    ];
+    let mut handler = FileHandler::new(files, headers, false);
+
+    loop {
+        match handler.next() {
+            Some(record) => println!("{:?}", record),
+            None => break,
+        }
+    }
 }
 fn main() {
     parse_data_AS();

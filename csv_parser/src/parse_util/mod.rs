@@ -440,8 +440,8 @@ pub fn parse_records_avellaneda_stoikov(
         dec!(0),
         dec!(0),
         dec!(0),
-        Side::Ask,
         dec!(0),
+        Side::Ask,
     );
 
     // // start looping updates and trades
@@ -469,8 +469,8 @@ pub fn parse_records_avellaneda_stoikov(
                     best_bid,
                     best_ask,
                     dec!(0),
-                    Side::Ask,
                     dec!(0),
+                    Side::Ask,
                 );
                 writer.serialize(recorded_data).unwrap();
                 previous_timestamp = update_record.timestamp;
@@ -491,8 +491,8 @@ pub fn parse_records_avellaneda_stoikov(
                 best_bid,
                 best_ask,
                 trade_record.qty,
-                Side::Ask,
                 trade_record.price,
+                Side::Ask,
             );
             writer.serialize(recorded_data).unwrap();
             previous_timestamp = trade_record.timestamp;
