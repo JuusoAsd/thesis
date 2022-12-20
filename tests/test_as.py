@@ -1,10 +1,19 @@
+import math
 import logging
 import numpy as np
 from scipy.optimize import curve_fit
 from csv_parser.AS.intensity import IntensityEstimator, curve_func
+import pandas as pd
 
 
 def test_read_line_trades(caplog):
+    # TODO: currently midprice is not used but it should be included in calculating intensity (see update_trades)
+    # TODO: use rust to parse trades and orderbook data so that it records following:
+    # column 1, timestamps in milliseconds
+    # column 2, current midprice based on orderbook
+    # column 3, trade price
+    # column 4: trade size
+    # recording is done every 10 milliseconds OR whenever a trade happens
     caplog.set_level(logging.INFO)
 
     n = 0
@@ -14,6 +23,7 @@ def test_read_line_trades(caplog):
     ) as f:
         main_estimator = IntensityEstimator()
         secondary_estimator = IntensityEstimator()
+        full_estimator = IntensityEstimator()
 
         previous_time = 0
         lookback_start = 0
@@ -22,7 +32,7 @@ def test_read_line_trades(caplog):
         # record_interval, how many timestamps between each recorded value
         # lookback, how many timestamps to look back when estimating intensity
         # TODO: Smoothing? is there some moving average parameter? This should probably be done later...
-        record_interval = 100
+        record_interval = 10_000
         lookback = 5_000_000
         lookback_half = lookback / 2
 
@@ -40,10 +50,11 @@ def test_read_line_trades(caplog):
 
             if time >= previous_time + record_interval:
                 main_estimator.estimate_intensity([(price, amount)])
-                print(time, main_estimator.alpha, main_estimator.kappa)
+                full_estimator.estimate_intensity([(price, amount)])
                 previous_time = time
             else:
                 main_estimator.update_trades([(price, amount)])
+                full_estimator.update_trades([(price, amount)])
 
             if time >= lookback_start + lookback_half:
                 secondary_estimator.update_trades([(price, amount)])
@@ -57,55 +68,27 @@ def test_read_line_trades(caplog):
                 lookback_start = time
 
 
-def test_estimate():
-    data = {
-        1.2373: 10400.0,
-        1.2372: 31860.0,
-        1.2371: 35555.0,
-        1.237: 28334.0,
-        1.2369: 24401.0,
-        1.2368: 10640.0,
-        1.2367: 2343.0,
-        1.2366: 3580.0,
-        1.2365: 13150.0,
-        1.2374: 25631.0,
-        1.2375: 19264.0,
-        1.2376: 31467.0,
-        1.2378: 32398.0,
-        1.2379: 22347.0,
-        1.238: 45018.0,
-        1.2381: 35458.0,
-        1.2382: 43397.0,
-        1.2383: 31523.0,
-        1.2384: 31197.0,
-        1.2385: 14862.0,
-        1.2387: 10809.0,
-        1.2388: 2630.0,
-        1.2386: 15867.0,
-        1.2377: 23174.0,
-        1.2364: 3936.0,
-        1.2363: 103.0,
-        1.2362: 92.0,
-        1.2361: 37.0,
-        1.236: 97.0,
-        1.2359: 2327.0,
-        1.2358: 7025.0,
-        1.2357: 8666.0,
-        1.2356: 8649.0,
-        1.2355: 27289.0,
-        1.2354: 1070.0,
-    }
+def test_hummingbot(caplog):
+    # Testing estimate calculations as per: https://github.com/hummingbot/hummingbot/blob/433df629f3a486a1b6e83bfd8a19493ba20e7e85/test/hummingbot/strategy/utils/trailing_indicators/test_trading_intensity.py#L230
+    caplog.set_level(logging.DEBUG)
 
-    price_levels = np.array(list(data.keys()))
-    price_levels.sort()
-    price_levels = price_levels[::-1]
-    lambdas = np.array([data[x] for x in price_levels])
-    param, _ = curve_fit(
-        f=curve_func,
-        xdata=price_levels,
-        ydata=lambdas,
-        p0=(1, 1),
-        method="dogbox",
-        bounds=([0, 0], [np.inf, np.inf]),
-    )
-    print(param)
+    estimator = IntensityEstimator()
+    last_price = 1
+    trade_price_levels = [2, 3, 4, 5]
+
+    a = 2
+    b = 0.1
+
+    ts = [curve_func(p - last_price, a, b) for p in trade_price_levels]
+
+    timestamp = pd.Timestamp("2019-01-01", tz="UTC").timestamp()
+    timestamp += 1
+
+    estimator.update_trades(zip(trade_price_levels, ts, [last_price] * 4))
+    estimator.calculate_current_values()
+
+    alpha = math.isclose(estimator.alpha, a, rel_tol=1e-8)
+    kappa = math.isclose(estimator.kappa, b, rel_tol=1e-8)
+
+    assert alpha, f"{estimator.alpha / a * 1e10} is not {1e10}"
+    assert kappa, f"{estimator.kappa / b * 1e10} is not {1e10}"
