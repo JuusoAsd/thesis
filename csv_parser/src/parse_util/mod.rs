@@ -408,6 +408,8 @@ pub fn parse_records_avellaneda_stoikov(
     // NOTE: If orderbook and trade happen at same timestamp, the trade is recorded first and previous orderbook update is used
 
     // initialze file handler for writing parsed data
+    let start_time = SystemTime::now();
+    let mut count = 0;
     let mut writer = csv::Writer::from_path(target_path).unwrap();
     let mut previous_timestamp = start_timestamp;
 
@@ -443,6 +445,15 @@ pub fn parse_records_avellaneda_stoikov(
 
     // // start looping updates and trades
     loop {
+        count += 1;
+        if count % 1_000_000 == 0 {
+            println!(
+                "Processed {} updates in {} seconds",
+                count,
+                start_time.elapsed().unwrap().as_secs()
+            );
+        }
+
         if update_record.timestamp < trade_record.timestamp {
             // always update orderbook state with latest
             orderbook.update_parse_record(&update_record);
