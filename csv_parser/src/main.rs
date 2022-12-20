@@ -6,6 +6,7 @@ mod parse_util;
 use file_util::{get_first_snapshot_file, get_folder_files, get_folder_update_files, FileHandler};
 use parse_util::{parse_records_avellaneda_stoikov, parse_snapshot, parse_updates_v2};
 
+
 fn parse_data_v1() {
     // v1 parses data as follows:
     // OB full state is recorded every n timestamps (where n is milliseconds), recording is OB state at end of the timestamp
@@ -28,12 +29,12 @@ fn parse_data_v2() {
     //  - OB(t+n)
 
     let file_count = 1;
-    let target_path = PathBuf::from("/home/juuso/Documents/gradu/parsed_data/orderbook");
+    let target_path = PathBuf::from("/C:/Users/Ville/Documents/gradu/data");
     let tracked_levels = 25;
     let timestamp_aggregation = 10;
 
     let folder_path =
-        PathBuf::from("/media/juuso/5655B83E58A8FD4F/orderbook/ADAUSDT_T_DEPTH_202211031113(1)");
+        PathBuf::from("/C:/Users/Ville/Documents/gradu/data/ADAUSDT_T_DEPTH_2021-12-21");
     let first_snapshot_file: PathBuf = get_first_snapshot_file(&folder_path).unwrap();
     let update_files = get_folder_update_files(&folder_path);
     let (first_ts, ob) = parse_snapshot(&first_snapshot_file, 0);
@@ -55,13 +56,13 @@ fn parse_data_v2() {
 }
 
 fn parse_data_AS() {
-    let file_count = 2;
+    let file_count = 0;
     let target_path =
-        PathBuf::from("/home/juuso/Documents/gradu/parsed_data/AvellanedaStoikov/data.csv");
+        PathBuf::from(r"C:\Users\Ville\Documents\gradu\parsed_data\AS\data.csv");
     let timestamp_aggregation = 10;
 
     let update_path =
-        PathBuf::from("/media/juuso/5655B83E58A8FD4F/orderbook/ADAUSDT_T_DEPTH_202211031113(1)");
+        PathBuf::from(r"C:\Users\Ville\Documents\gradu\data\ADAUSDT_T_DEPTH_2021-12-21");
     let update_headers = StringRecord::from(vec![
         "symbol",
         "timestamp",
@@ -74,7 +75,7 @@ fn parse_data_AS() {
         "pu",
     ]);
 
-    let trade_path = PathBuf::from("/media/juuso/5655B83E58A8FD4F/trades");
+    let trade_path = PathBuf::from(r"C:\Users\Ville\Documents\gradu\data\trades");
     let trade_header = StringRecord::from(vec![
         "trade_id",
         "price",
@@ -110,6 +111,7 @@ fn parse_data_AS() {
         ob,
     )
 }
+
 fn main() {
     parse_data_AS();
 }

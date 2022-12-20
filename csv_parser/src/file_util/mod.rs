@@ -60,6 +60,7 @@ pub struct ASRecord {
     best_ask: Decimal,
     size: Decimal,
     side: Side,
+    price: Decimal,
 }
 
 impl ASRecord {
@@ -70,6 +71,7 @@ impl ASRecord {
         best_ask: Decimal,
         size: Decimal,
         side: Side,
+        price: Decimal,
     ) -> Self {
         Self {
             timestamp,
@@ -78,6 +80,7 @@ impl ASRecord {
             best_ask,
             size,
             side,
+            price,
         }
     }
 }
