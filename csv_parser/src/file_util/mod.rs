@@ -69,24 +69,6 @@ impl Iterator for FileHandler {
         }
     }
 }
-// impl Iterator for FileHandler {
-//     type Item = StringRecord;
-//     fn next(&mut self) -> Option<StringRecord> {
-//         match self.file_iter.next().unwrap() {
-//             Ok(record) => Some(record),
-//             Err(e) => {
-//                 println!("Error with next of FileHandler: {}", e);
-//                 let next_path = match self.path_iter.next() {
-//                     Some(p) => p,
-//                     None => return None,
-//                 };
-//                 let file_reader = Reader::from_path(next_path).unwrap();
-//                 self.file_iter = file_reader.into_records();
-//                 self.next()
-//             }
-//         }
-//     }
-// }
 
 #[derive(Debug, Serialize)]
 pub struct ASRecord {
