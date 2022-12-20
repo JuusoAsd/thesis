@@ -1,12 +1,10 @@
-use std::collections::BTreeMap;
-use std::fs::File;
-
-use super::parse_util::Side;
+use super::parse_util::{Side, UpdateRecord};
 use csv::Writer;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
-
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::fs::File;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Orderbook {
@@ -34,6 +32,31 @@ impl Orderbook {
             asks: BTreeMap::new(),
         }
     }
+
+    pub fn update(&mut self, level: OrderbookLevel) {
+        match level.side {
+            Side::Bid => {
+                if level.size == dec!(0.0) {
+                    self.bids.remove(&level.price);
+                } else {
+                    self.bids.insert(level.price, level);
+                }
+            }
+            Side::Ask => {
+                if level.size == dec!(0.0) {
+                    self.asks.remove(&level.price);
+                } else {
+                    self.asks.insert(level.price, level);
+                }
+            }
+        }
+    }
+
+    pub fn update_parse_record(&mut self, record: &UpdateRecord) {
+        let level = OrderbookLevel::from_update_record(record);
+        self.update(level);
+    }
+
     pub fn first_n_bids(&self, n: i64) -> BTreeMap<Decimal, OrderbookLevel> {
         // create an n lenght btreemap of the last n bids
         let mut result = BTreeMap::new();
@@ -242,6 +265,14 @@ impl OrderbookLevel {
             timestamp: self.timestamp,
             side: self.side,
             price: self.price,
+        }
+    }
+    pub fn from_update_record(record: &UpdateRecord) -> OrderbookLevel {
+        OrderbookLevel {
+            timestamp: record.timestamp,
+            side: record.side,
+            size: record.qty,
+            price: record.price,
         }
     }
 }
