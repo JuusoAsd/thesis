@@ -1,5 +1,5 @@
 use super::parse_util::Side;
-use csv::{Reader, StringRecord, StringRecordsIntoIter};
+use csv::{Reader, ReaderBuilder, StringRecord, StringRecordsIntoIter};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -11,16 +11,25 @@ pub struct FileHandler {
     path_iter: IntoIter<PathBuf>,
     file_iter: StringRecordsIntoIter<File>,
     pub headers: StringRecord,
+    has_headers: bool,
 }
 
 impl FileHandler {
-    pub fn new(files: Vec<PathBuf>, headers: StringRecord) -> Self {
+    pub fn new(files: Vec<PathBuf>, headers: StringRecord, has_headers: bool) -> Self {
         let mut path_iter = files.into_iter();
-        let file_reader = Reader::from_path(path_iter.next().unwrap()).unwrap();
+        let file_reader = if has_headers {
+            Reader::from_path(path_iter.next().unwrap()).unwrap()
+        } else {
+            ReaderBuilder::new()
+                .has_headers(false)
+                .from_path(path_iter.next().unwrap())
+                .unwrap()
+        };
         Self {
             path_iter,
             file_iter: file_reader.into_records(),
             headers,
+            has_headers,
         }
     }
 
@@ -36,15 +45,24 @@ impl FileHandler {
 impl Iterator for FileHandler {
     type Item = StringRecord;
     fn next(&mut self) -> Option<StringRecord> {
-        match self.file_iter.next().unwrap() {
-            Ok(record) => Some(record),
-            Err(e) => {
-                println!("Error with next of FileHandler: {}", e);
+        match self.file_iter.next() {
+            Some(Ok(record)) => Some(record),
+            Some(Err(e)) => {
+                panic!("Error with next of FileHandler: {}", e);
+            }
+            None => {
                 let next_path = match self.path_iter.next() {
                     Some(p) => p,
                     None => return None,
                 };
-                let file_reader = Reader::from_path(next_path).unwrap();
+                let file_reader = if self.has_headers {
+                    Reader::from_path(next_path).unwrap()
+                } else {
+                    ReaderBuilder::new()
+                        .has_headers(false)
+                        .from_path(next_path)
+                        .unwrap()
+                };
                 self.file_iter = file_reader.into_records();
                 self.next()
             }
@@ -59,8 +77,8 @@ pub struct ASRecord {
     best_bid: Decimal,
     best_ask: Decimal,
     size: Decimal,
-    side: Side,
     price: Decimal,
+    side: Side,
 }
 
 impl ASRecord {
@@ -70,8 +88,8 @@ impl ASRecord {
         best_bid: Decimal,
         best_ask: Decimal,
         size: Decimal,
-        side: Side,
         price: Decimal,
+        side: Side,
     ) -> Self {
         Self {
             timestamp,
@@ -79,8 +97,8 @@ impl ASRecord {
             best_bid,
             best_ask,
             size,
-            side,
             price,
+            side,
         }
     }
 }
