@@ -1,30 +1,107 @@
-use std::collections::{BTreeMap, HashMap};
+use super::parse_util::Side;
+use csv::{Reader, ReaderBuilder, StringRecord, StringRecordsIntoIter};
+use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::vec::IntoIter;
 
-use csv::Writer;
-use rust_decimal::Decimal;
-use rust_decimal_macros::dec;
-use serde::{Deserialize, Serialize};
+pub struct FileHandler {
+    path_iter: IntoIter<PathBuf>,
+    file_iter: StringRecordsIntoIter<File>,
+    pub headers: StringRecord,
+    has_headers: bool,
+}
 
-// use super::orderbook_util::{Orderbook, OrderbookLevel, OrderbookLevelPartial};
+impl FileHandler {
+    pub fn new(files: Vec<PathBuf>, headers: StringRecord, has_headers: bool) -> Self {
+        let mut path_iter = files.into_iter();
+        let file_reader = if has_headers {
+            Reader::from_path(path_iter.next().unwrap()).unwrap()
+        } else {
+            ReaderBuilder::new()
+                .has_headers(false)
+                .from_path(path_iter.next().unwrap())
+                .unwrap()
+        };
+        Self {
+            path_iter,
+            file_iter: file_reader.into_records(),
+            headers,
+            has_headers,
+        }
+    }
 
-// pub fn find_first_timestamp(path: &str) -> i64 {
-//     let mut rdr = csv::Reader::from_path(path).unwrap();
-//     for result in rdr.deserialize() {
-//         let record: UpdateRecord = match result {
-//             Ok(r) => r,
-//             Err(e) => {
-//                 println!("Error reading update: {}", e);
-//                 continue;
-//             }
-//         };
-//         return record.timestamp;
-//     }
-//     0
-// }
+    pub fn deserialize_value<'a, T>(&'a mut self, value: &'a StringRecord) -> T
+    where
+        T: Deserialize<'a>,
+    {
+        let val_deser: T = value.deserialize(Some(&self.headers)).unwrap();
+        val_deser
+    }
+}
+
+impl Iterator for FileHandler {
+    type Item = StringRecord;
+    fn next(&mut self) -> Option<StringRecord> {
+        match self.file_iter.next() {
+            Some(Ok(record)) => Some(record),
+            Some(Err(e)) => {
+                panic!("Error with next of FileHandler: {}", e);
+            }
+            None => {
+                let next_path = match self.path_iter.next() {
+                    Some(p) => p,
+                    None => return None,
+                };
+                let file_reader = if self.has_headers {
+                    Reader::from_path(next_path).unwrap()
+                } else {
+                    ReaderBuilder::new()
+                        .has_headers(false)
+                        .from_path(next_path)
+                        .unwrap()
+                };
+                self.file_iter = file_reader.into_records();
+                self.next()
+            }
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct ASRecord {
+    timestamp: i64,
+    mid_price: Decimal,
+    best_bid: Decimal,
+    best_ask: Decimal,
+    size: Decimal,
+    price: Decimal,
+    side: Side,
+}
+
+impl ASRecord {
+    pub fn new(
+        timestamp: i64,
+        mid_price: Decimal,
+        best_bid: Decimal,
+        best_ask: Decimal,
+        size: Decimal,
+        price: Decimal,
+        side: Side,
+    ) -> Self {
+        Self {
+            timestamp,
+            mid_price,
+            best_bid,
+            best_ask,
+            size,
+            price,
+            side,
+        }
+    }
+}
 
 pub fn read_rowcount(path: &str) -> i64 {
     let mut rdr = csv::Reader::from_path(path).unwrap();
@@ -67,6 +144,23 @@ pub fn get_folder_update_files(folder_path: &PathBuf) -> Vec<PathBuf> {
                 path_vec.push(file_path);
             }
         }
+    }
+    path_vec.sort();
+    path_vec
+}
+
+pub fn get_folder_files(folder_path: &PathBuf) -> Vec<PathBuf> {
+    let mut path_vec = Vec::new();
+    let files = match fs::read_dir(folder_path) {
+        Ok(files) => files,
+        Err(_) => {
+            println!("Error reading folder: {}", folder_path.to_str().unwrap());
+            return path_vec;
+        }
+    };
+    for file in files {
+        let file_path = file.as_ref().unwrap().path();
+        path_vec.push(file_path);
     }
     path_vec.sort();
     path_vec
