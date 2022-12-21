@@ -20,7 +20,7 @@ class IntensityEstimator:
         logging.debug(f"new trades: {new_trades}")
         for trade_price, amount, mid_price in new_trades:
             self.trade_count += 1
-            price_diff = abs(trade_price - mid_price)
+            price_diff = round(abs(trade_price - mid_price), 5)
             if price_diff in self.trades:
                 self.trades[price_diff] += amount
             else:

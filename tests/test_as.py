@@ -46,10 +46,13 @@ def test_read_line_trades(caplog):
                 print(f"End of file reached after {n} lines")
                 break
             line = line.rstrip().split(",")
+            size = float(line[col["size"]])
+            if size == 0:
+                continue
+
             time = int(line[col["timestamp"]])
             mid_price = float(line[col["mid_price"]])
             trade_price = float(line[col["price"]])
-            size = float(line[col["size"]])
 
             # always update the estimators with trades
             main_estimator.update_trades([(trade_price, size, mid_price)])
@@ -77,6 +80,7 @@ def test_read_line_trades(caplog):
 
             if n % 10_000 == 0:
                 print(f"Processed {n} lines, kappa: {main_estimator.kappa}")
+                # print(f"{main_estimator.trades}")
 
 
 def test_hummingbot(caplog):
