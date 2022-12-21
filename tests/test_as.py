@@ -18,10 +18,15 @@ def test_read_line_trades(caplog):
     caplog.set_level(logging.INFO)
 
     n = 0
+    filepath = "/home/juuso/Documents/gradu/parsed_data/AvellanedaStoikov/data.csv"
     with open(
-        "/home/juuso/Documents/gradu/parsed_data/trades/ADAUSDT-trades-2021-12-21.csv",
+        filepath,
         "r",
     ) as f:
+
+        columns = f.readline().rstrip().split(",")
+        col = {k: n for n, k in enumerate(columns)}
+
         main_estimator = IntensityEstimator()
         secondary_estimator = IntensityEstimator()
         full_estimator = IntensityEstimator()
@@ -35,35 +40,39 @@ def test_read_line_trades(caplog):
         # lookback, how many timestamps to look back when estimating intensity
         # TODO: Smoothing? is there some moving average parameter? This should probably be done later...
         record_interval = 10_000
-        lookback = 5_000_000
+        lookback = 10_000_000
         lookback_half = lookback / 2
-
-        
 
         # we start by updating main estimator with trades and recording the value every record_interval
         # after lookback_half, we also start updating secondary estimator with the same trades
         # after lookback, we set the secondary as main and reset secondary
         while True:
             n += 1
-            line = f.readline().rstrip().split(",")
-            price = float(line[1])
-            amount = float(line[2])
-            time = int(line[4])
+            line = f.readline()
+            if not line:
+                print(f"End of file reached after {n} lines")
+                break
+            line = line.rstrip().split(",")
+            time = int(line[col["timestamp"]])
+            mid_price = float(line[col["mid_price"]])
+            trade_price = float(line[col["price"]])
+            size = float(line[col["size"]])
+
+            # always update the estimators with trades
+            main_estimator.update_trades([(trade_price, size, mid_price)])
+            full_estimator.update_trades([(trade_price, size, mid_price)])
+            volatility_estimate.update_prices(mid_price)
+
             if lookback_start == 0:
                 lookback_start = time
 
             if time >= previous_time + record_interval:
-                main_estimator.estimate_intensity([(price, amount)])
-                full_estimator.estimate_intensity([(price, amount)])
+                main_estimator.calculate_current_values()
                 volatility_estimate.count_volatility()
                 previous_time = time
-            else:
-                main_estimator.update_trades([(price, amount)])
-                full_estimator.update_trades([(price, amount)])
-                volatility_estimate.update_prices(price)
 
             if time >= lookback_start + lookback_half:
-                secondary_estimator.update_trades([(price, amount)])
+                secondary_estimator.update_trades([(trade_price, size, mid_price)])
 
             if time >= lookback_start + lookback:
                 logging.info(
@@ -72,6 +81,9 @@ def test_read_line_trades(caplog):
                 main_estimator = secondary_estimator
                 secondary_estimator = IntensityEstimator()
                 lookback_start = time
+
+            if n % 10_000 == 0:
+                print(f"Processed {n} lines, kappa: {main_estimator.kappa}")
 
 
 def test_hummingbot(caplog):
@@ -85,12 +97,12 @@ def test_hummingbot(caplog):
     a = 2
     b = 0.1
 
-    ts = [curve_func(p - last_price, a, b) for p in trade_price_levels]
+    size = [curve_func(p - last_price, a, b) for p in trade_price_levels]
 
     timestamp = pd.Timestamp("2019-01-01", tz="UTC").timestamp()
     timestamp += 1
 
-    estimator.update_trades(zip(trade_price_levels, ts, [last_price] * 4))
+    estimator.update_trades(zip(trade_price_levels, size, [last_price] * 4))
     estimator.calculate_current_values()
 
     alpha = math.isclose(estimator.alpha, a, rel_tol=1e-8)

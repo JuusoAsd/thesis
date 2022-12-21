@@ -18,12 +18,13 @@ class IntensityEstimator:
     def update_trades(self, new_trades):
         # new trades is an array containing [trade price, trade amount and current mid price when trade took place]
         logging.debug(f"new trades: {new_trades}")
-        for price, amount, mid_price in new_trades:
+        for trade_price, amount, mid_price in new_trades:
             self.trade_count += 1
-            if price in self.trades:
-                self.trades[abs(price - mid_price)] += amount
+            price_diff = abs(trade_price - mid_price)
+            if price_diff in self.trades:
+                self.trades[price_diff] += amount
             else:
-                self.trades[abs(price - mid_price)] = amount
+                self.trades[price_diff] = amount
 
     def calculate_current_values(self):
         price_levels = np.array(list(self.trades.keys()))
