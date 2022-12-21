@@ -8,13 +8,6 @@ import pandas as pd
 
 
 def test_read_line_trades(caplog):
-    # TODO: currently midprice is not used but it should be included in calculating intensity (see update_trades)
-    # TODO: use rust to parse trades and orderbook data so that it records following:
-    # column 1, timestamps in milliseconds
-    # column 2, current midprice based on orderbook
-    # column 3, trade price
-    # column 4: trade size
-    # recording is done every 10 milliseconds OR whenever a trade happens
     caplog.set_level(logging.INFO)
 
     n = 0
