@@ -3,6 +3,7 @@ import logging
 import numpy as np
 from scipy.optimize import curve_fit
 from csv_parser.AS.intensity import IntensityEstimator, curve_func
+from csv_parser.AS.volatility import VolatilityEstimator
 import pandas as pd
 
 
@@ -24,6 +25,7 @@ def test_read_line_trades(caplog):
         main_estimator = IntensityEstimator()
         secondary_estimator = IntensityEstimator()
         full_estimator = IntensityEstimator()
+        volatility_estimate = VolatilityEstimator()
 
         previous_time = 0
         lookback_start = 0
@@ -35,6 +37,8 @@ def test_read_line_trades(caplog):
         record_interval = 10_000
         lookback = 5_000_000
         lookback_half = lookback / 2
+
+        
 
         # we start by updating main estimator with trades and recording the value every record_interval
         # after lookback_half, we also start updating secondary estimator with the same trades
@@ -51,10 +55,12 @@ def test_read_line_trades(caplog):
             if time >= previous_time + record_interval:
                 main_estimator.estimate_intensity([(price, amount)])
                 full_estimator.estimate_intensity([(price, amount)])
+                volatility_estimate.count_volatility()
                 previous_time = time
             else:
                 main_estimator.update_trades([(price, amount)])
                 full_estimator.update_trades([(price, amount)])
+                volatility_estimate.update_prices(price)
 
             if time >= lookback_start + lookback_half:
                 secondary_estimator.update_trades([(price, amount)])
