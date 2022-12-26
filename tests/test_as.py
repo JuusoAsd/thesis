@@ -11,7 +11,9 @@ def test_read_line_trades(caplog):
     caplog.set_level(logging.INFO)
 
     n = 0
-    filepath = "/home/juuso/Documents/gradu/parsed_data/AvellanedaStoikov/data.csv"
+    filepath = (
+        "/home/juuso/Documents/gradu/parsed_data/AvellanedaStoikov/data_reverse.csv"
+    )
     with open(
         filepath,
         "r",
@@ -20,25 +22,10 @@ def test_read_line_trades(caplog):
         columns = f.readline().rstrip().split(",")
         col = {k: n for n, k in enumerate(columns)}
 
-        main_estimator = IntensityEstimator()
-        secondary_estimator = IntensityEstimator()
-        full_estimator = IntensityEstimator()
+        # lookback in milliseconds
+        main_estimator = IntensityEstimator(lookback=250_000)
         volatility_estimate = VolatilityEstimator()
 
-        previous_time = 0
-        lookback_start = 0
-
-        # setting parameters, everything is in milliseconds:
-        # record_interval, how many timestamps between each recorded value
-        # lookback, how many timestamps to look back when estimating intensity
-        # TODO: Smoothing? is there some moving average parameter? This should probably be done later...
-        record_interval = 10_000
-        lookback = 10_000_000
-        lookback_half = lookback / 2
-
-        # we start by updating main estimator with trades and recording the value every record_interval
-        # after lookback_half, we also start updating secondary estimator with the same trades
-        # after lookback, we set the secondary as main and reset secondary
         while True:
             n += 1
             line = f.readline()
@@ -55,30 +42,11 @@ def test_read_line_trades(caplog):
             trade_price = float(line[col["price"]])
 
             # always update the estimators with trades
-            main_estimator.update_trades([(trade_price, size, mid_price)])
-            full_estimator.update_trades([(trade_price, size, mid_price)])
+            main_estimator.update_trades([(time, trade_price, size, mid_price)])
             volatility_estimate.update_prices(mid_price)
 
-            if lookback_start == 0:
-                lookback_start = time
-
-            if time >= previous_time + record_interval:
+            if n % 100_000 == 0:
                 main_estimator.calculate_current_values()
-                volatility_estimate.count_volatility()
-                previous_time = time
-
-            if time >= lookback_start + lookback_half:
-                secondary_estimator.update_trades([(trade_price, size, mid_price)])
-
-            if time >= lookback_start + lookback:
-                logging.info(
-                    f"Switching estimators at {time} with {main_estimator.trade_count} trades"
-                )
-                main_estimator = secondary_estimator
-                secondary_estimator = IntensityEstimator()
-                lookback_start = time
-
-            if n % 10_000 == 0:
                 print(f"Processed {n} lines, kappa: {main_estimator.kappa}")
                 # print(f"{main_estimator.trades}")
 
@@ -87,7 +55,7 @@ def test_hummingbot(caplog):
     # Testing estimate calculations as per: https://github.com/hummingbot/hummingbot/blob/433df629f3a486a1b6e83bfd8a19493ba20e7e85/test/hummingbot/strategy/utils/trailing_indicators/test_trading_intensity.py#L230
     caplog.set_level(logging.DEBUG)
 
-    estimator = IntensityEstimator()
+    estimator = IntensityEstimator(lookback=1000)
     last_price = 1
     trade_price_levels = [2, 3, 4, 5]
 
@@ -99,7 +67,7 @@ def test_hummingbot(caplog):
     timestamp = pd.Timestamp("2019-01-01", tz="UTC").timestamp()
     timestamp += 1
 
-    estimator.update_trades(zip(trade_price_levels, size, [last_price] * 4))
+    estimator.update_trades(zip([1] * 4, trade_price_levels, size, [last_price] * 4))
     estimator.calculate_current_values()
 
     alpha = math.isclose(estimator.alpha, a, rel_tol=1e-8)
@@ -107,3 +75,35 @@ def test_hummingbot(caplog):
 
     assert alpha, f"{estimator.alpha / a * 1e10} is not {1e10}"
     assert kappa, f"{estimator.kappa / b * 1e10} is not {1e10}"
+
+
+def test_as_orderbook():
+    filepath = "/home/juuso/Documents/gradu/parsed_data/orderbook/2021-12-21.csv"
+    every_n = 1000
+    every_write = 1_000_00
+    n = 0
+    main_estimator = IntensityEstimator()
+    with open(
+        filepath,
+        "r",
+    ) as f:
+        while True:
+            if n % every_n == 0:
+                line = f.readline()
+                line = line.rstrip().split(",")
+                mid_price = float(line[1])
+                price_next = True
+                for j in line[2:]:
+                    if price_next:
+                        price = float(j)
+                        price_next = False
+                    else:
+                        size = float(j)
+                        price_next = True
+                        main_estimator.update_trades([(price, size, mid_price)])
+            if n % every_write == 0:
+                main_estimator.calculate_current_values()
+                print(f"Processed {n} lines, kappa: {main_estimator.kappa}")
+                print(main_estimator.trades)
+
+            n += 1
