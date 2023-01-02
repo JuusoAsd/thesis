@@ -37,85 +37,86 @@ class AgentBaseClass:
 class MMEnv(gym.Env):
     def __init__(
         self,
-        trades_folder,
-        orderbook_folder,
+        state_folder,
         agent: AgentBaseClass,
         agent_parameters={},
         capital=1000,
+        aggregation_window=10,
     ):
         self.agent = agent(**agent_parameters)
-        self.trades_folder = trades_folder
-        self.orderbook_folder = orderbook_folder
+        self.state_folder = state_folder
         self.capital = capital
+        self.aggregation_window = aggregation_window
         self.reset()
 
     def reset(self):
         self.counter = 0
         self.error_counter = 0
         self.quote_asset = self.capital
+        self.base_asset = 0
+        self.previous_ts = 0
 
         self.bid = 0
         self.bid_size = 0
         self.ask = 0
         self.ask_size = 0
 
-        # self.exec_market_buy = 0
-        # self.exec_market_sell = 0
-        # self.exec_limit_buy = 0
-        # self.exec_limit_sell = 0
-
-        self.trades_manager = FileManager(self.trades_folder, Trade)
-        self.orderbook_manager = FileManager(self.orderbook_folder)
-
-        self.current_trade = self.trades_manager.get_next_event()
+        self.state_manager = FileManager(self.state_folder, self.agent.data_type)
+        """
+        Current state constains all the data needed to execute trades
+          - timestamp
+          - best bid (for execution of market sell orders)
+          - best ask (for execution of market buy orders)
+          - possible trade executed on the timestamp (for execution of limit orders)
+          """
+        self.current_state = self.state_manager.get_next_event()
 
     def step(self, action):
         """
-        Agent set its desired b/a in the previous state
+        Agent has set its desired b/a in the previous state
         Multiple events happen in environment based on latest data in following order:
             - market orders by agent are executed
             - best bid and ask, midprice are updated
             - possible trades are executed againts agent's limit orders
         Agent sets new desired b/a based on the latest state
-        """
 
-        """
-        Step has some configuration associated:
-        - time_aggregation (10): how many milliseconds between each time agent can act, this is to make lag more realistic 
+        Step has some configuration associated with it:
+        - aggregation_window (10): how many milliseconds minimum between agent actions
         """
         self.counter += 1
         if self.counter % 1_000_000 == 0:
             print(f"Counter: {self.counter}, Error counter: {self.error_counter}")
+        if self.previous_ts == 0:
+            self.previous_ts = self.current_state.timestamp
 
-        self.execute_market_orders()
-        self.execute_limit_orders()
+        # Only update orders when aggregation_window has passed since previous update, still execute trades if exist
+        while self.current_state.timestamp - self.previous_ts < self.aggregation_window:
+            self.execute_market_orders()
+            self.execute_limit_orders()
+            self.current_state = self.state_manager.get_next_event()
+            if self.current_state is None:
+                return True
+        self.previous_ts = self.current_state.timestamp
+        self.agent.step()
 
     def execute_market_orders(self):
         """
         market orders are executed at at best b/a
         """
-        if self.ask < self.mid_price and self.ask_size > 0:
+        if self.ask <= self.current_state.best_bid and self.ask_size > 0:
             # self._sell(self.mid_price, self.ask_size)
-            self._sell(self.ask, self.ask_size)
-            self.exec_market_sell = 1
-        if self.bid > self.mid_price and self.bid_size > 0:
+            self._sell(self.current_state.best_bid, self.ask_size)
+
+        if self.bid >= self.current_state.best_ask and self.bid_size > 0:
             # self._buy(self.mid_price, self.bid_size)
-            self._buy(self.bid, self.bid_size)
-            self.exec_market_buy = 1
+            self._buy(self.current_state.best_ask, self.bid_size)
 
-    def execute_limit_orders(self, timestamp):
-        while self.current_trade.timestamp <= timestamp:
-            self.execute_trade(self.current_trade)
-            self.current_trade = self.trades_manager.get_next_event()
-
-    def execute_trade(self, trade):
-        # check if our current bid is hit
-        if self.bid >= trade.price and self.bid_size > 0:
-            self._buy(trade.price, self.bid_size)
-            self.exec_limit_buy = 1
-        elif self.ask <= trade.price and self.ask_size > 0:
-            self._sell(trade.price, self.ask_size)
-            self.exec_limit_sell = 1
+    def execute_limit_orders(self):
+        if self.current_state.trade is not None:
+            if self.current_state.trade.price <= self.bid:
+                self.buy(self.bid, self.bid_size)
+            elif self.current_state.trade.price >= self.ask:
+                self.sell(self.ask, self.ask_size)
 
     def get_total_value(self, mid_price):
         value = self.quote_asset + self.base_asset * mid_price
@@ -133,7 +134,7 @@ class MMEnv(gym.Env):
     def _sell(self, price, amount):
         self.quote_asset += price * amount
         self.base_asset -= amount
-        self.ask = 0
+        self.ask = np.inf
         self.ask_size = 0
 
     def get_values(self):
