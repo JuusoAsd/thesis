@@ -1,9 +1,7 @@
 import math
 import logging
-import numpy as np
-from scipy.optimize import curve_fit
-from csv_parser.AS.intensity import IntensityEstimator, curve_func
-from csv_parser.AS.volatility import VolatilityEstimator
+from csv_parser.AS.estimators import IntensityEstimator, curve_func
+from csv_parser.AS.estimators import VolatilityEstimator
 import pandas as pd
 
 
@@ -11,9 +9,7 @@ def test_read_line_trades(caplog):
     caplog.set_level(logging.INFO)
 
     n = 0
-    filepath = (
-        "/home/juuso/Documents/gradu/parsed_data/AvellanedaStoikov/data_reverse.csv"
-    )
+    filepath = "./parsed_data/AvellanedaStoikov/data_reverse.csv"
     with open(
         filepath,
         "r",
@@ -78,7 +74,7 @@ def test_hummingbot(caplog):
 
 
 def test_as_orderbook():
-    filepath = "/home/juuso/Documents/gradu/parsed_data/orderbook/2021-12-21.csv"
+    filepath = "./parsed_data/orderbook/2021-12-21.csv"
     every_n = 1000
     every_write = 1_000_00
     n = 0
@@ -107,3 +103,9 @@ def test_as_orderbook():
                 print(main_estimator.trades)
 
             n += 1
+
+
+def test_parse_full():
+    from csv_parser.AS.parse_as import parse_as_full
+
+    parse_as_full()

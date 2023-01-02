@@ -4,17 +4,23 @@ import os
 class FileManager:
     def __init__(self, folder_path, output_type=None, headers=True):
         self.path = folder_path
-        self.files = os.listdir(self.path)
-        self.files.sort()
-        self.create_output = output_type
         self.headers = headers
+        self.create_output = output_type
+        if os.path.isdir(folder_path):
+            dir_files = os.listdir(self.path)
+            dir_files.sort()
+            self.files = []
+            for i in dir_files:
+                self.files.append(os.path.join(self.path, i))
+        else:
+            self.files = [folder_path]
         ok = self.get_next_file()
         if ok is False:
             raise Exception("No files in folder")
 
     def get_next_file(self):
         if len(self.files) > 0:
-            self.iterator = iter(open(os.path.join(self.path, self.files.pop(0))))
+            self.iterator = iter(open(self.files.pop(0)))
             if self.headers:
                 self.iterator.__next__()
             return True

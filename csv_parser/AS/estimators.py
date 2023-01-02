@@ -141,10 +141,8 @@ class VolatilityEstimator:
         self.prices.append(new_price)
         self.prices_count += 1
 
-    def count_volatility(self):
+    def calculate_volatility(self):
         # TO DO: Deciding sample size.. Similar to intensity calculations probably?
         price_sample = np.array(self.prices)
-        vol = np.sqrt(np.sum(np.square(np.diff(price_sample)))) / price_sample.size
+        vol = np.sqrt(np.sum(np.square(np.diff(price_sample)))) / self.prices_count
         self.volatility = vol
-        self.prices = []
-        self.prices_count = 0
