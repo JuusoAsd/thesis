@@ -1,3 +1,4 @@
+import csv
 from src.environments.util import FileManager
 from csv_parser.AS.estimators import IntensityEstimator
 from csv_parser.AS.estimators import VolatilityEstimator
@@ -11,6 +12,7 @@ def parse_as_full():
     """
     as_files = FileManager("./parsed_data/AvellanedaStoikov/data.csv", headers=True)
     target_file = open(f"./parsed_data/AvellanedaStoikov/AS_full.csv", "w+")
+    writer = csv.writer(target_file, delimiter=",")
     current_state = as_files.get_next_event()
     intensity = IntensityEstimator(lookback=250_000)
     volatility = VolatilityEstimator()
@@ -24,11 +26,22 @@ def parse_as_full():
 
         if trade_size != 0:
             intensity.update_trades([(ts, trade_price, trade_size, mid_price)])
-            intensity.calculate_current_values()
+            # intensity.calculate_current_values()
         volatility.update_prices(mid_price)
         # volatility.calculate_volatility()
 
-        intensity_estimate = intensity.kappa
-        vol_estimate = volatility.volatility
+        intensity_estimate = 1
+        vol_estimate = 1
 
+        writer.writerow(
+            [
+                ts,
+                best_bid,
+                best_ask,
+                trade_price,
+                trade_size,
+                vol_estimate,
+                intensity_estimate,
+            ]
+        )
         current_state = as_files.get_next_event()
