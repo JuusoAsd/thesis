@@ -2,6 +2,7 @@ import csv
 from src.environments.util import FileManager
 from csv_parser.AS.estimators import IntensityEstimator
 from csv_parser.AS.estimators import VolatilityEstimator
+import logging
 
 
 def parse_as_full():
@@ -12,12 +13,30 @@ def parse_as_full():
     """
     as_files = FileManager("./parsed_data/AvellanedaStoikov/data.csv", headers=True)
     target_file = open(f"./parsed_data/AvellanedaStoikov/AS_full.csv", "w+")
+    columns = [
+        "timestamp",
+        "best_bid",
+        "best_ask",
+        "trade_price",
+        "trade_size",
+        "vol_estimate",
+        "intensity_estimate",
+    ]
+    start_period = 1000_000
+    start_ts = 0
+    current_ts = 0
+    count = 0
     writer = csv.writer(target_file, delimiter=",")
+    writer.writerow(columns)
     current_state = as_files.get_next_event()
     intensity = IntensityEstimator(lookback=250_000)
-    volatility = VolatilityEstimator()
+    volatility = VolatilityEstimator(lookback=1_000_000, return_aggregation=5_000)
+
     while current_state is not None:
+        count += 1
         ts = int(current_state[0])
+        if start_ts == 0:
+            start_ts = ts
         mid_price = float(current_state[1])
         best_bid = float(current_state[2])
         best_ask = float(current_state[3])
@@ -26,22 +45,21 @@ def parse_as_full():
 
         if trade_size != 0:
             intensity.update_trades([(ts, trade_price, trade_size, mid_price)])
-            # intensity.calculate_current_values()
-        volatility.update_prices(mid_price)
-        # volatility.calculate_volatility()
+        volatility.update_prices(mid_price, ts)
 
-        intensity_estimate = 1
-        vol_estimate = 1
+        if ts - start_ts > start_period:
+            _, intensity_estimate = intensity.get_current_estimate(ts)
+            vol_estimate = volatility.get_current_estimate(ts)
 
-        writer.writerow(
-            [
-                ts,
-                best_bid,
-                best_ask,
-                trade_price,
-                trade_size,
-                vol_estimate,
-                intensity_estimate,
-            ]
-        )
+            writer.writerow(
+                [
+                    ts,
+                    best_bid,
+                    best_ask,
+                    trade_price,
+                    trade_size,
+                    vol_estimate,
+                    intensity_estimate,
+                ]
+            )
         current_state = as_files.get_next_event()
