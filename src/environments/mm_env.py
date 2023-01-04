@@ -67,7 +67,9 @@ class MMEnv(gym.Env):
           - timestamp
           - best bid (for execution of market sell orders)
           - best ask (for execution of market buy orders)
-          - possible trade executed on the timestamp (for execution of limit orders)
+          - trade price (0 if no trade)
+          - trade size (0 if no trade)
+        It also contains agent-specific data
           """
         self.current_state = self.state_manager.get_next_event()
 
@@ -101,14 +103,12 @@ class MMEnv(gym.Env):
 
     def execute_market_orders(self):
         """
-        market orders are executed at at best b/a
+        market orders are executed at at best bid-ask
         """
         if self.ask <= self.current_state.best_bid and self.ask_size > 0:
-            # self._sell(self.mid_price, self.ask_size)
             self._sell(self.current_state.best_bid, self.ask_size)
 
         if self.bid >= self.current_state.best_ask and self.bid_size > 0:
-            # self._buy(self.mid_price, self.bid_size)
             self._buy(self.current_state.best_ask, self.bid_size)
 
     def execute_limit_orders(self):
