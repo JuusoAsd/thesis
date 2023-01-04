@@ -43,7 +43,7 @@ class MMEnv(gym.Env):
         capital=1000,
         aggregation_window=10,
     ):
-        self.agent = agent(**agent_parameters)
+        self.agent = agent(env=self, **agent_parameters)
         self.state_folder = state_folder
         self.capital = capital
         self.aggregation_window = aggregation_window
@@ -52,6 +52,7 @@ class MMEnv(gym.Env):
     def reset(self):
         self.counter = 0
         self.error_counter = 0
+        self.trade_counter = 0
         self.quote_asset = self.capital
         self.base_asset = 0
         self.previous_ts = 0
@@ -87,7 +88,9 @@ class MMEnv(gym.Env):
         """
         self.counter += 1
         if self.counter % 1_000_000 == 0:
-            print(f"Counter: {self.counter}, Error counter: {self.error_counter}")
+            print(
+                f"Steps: {self.counter}, trades: {self.trade_counter} errors: {self.error_counter}"
+            )
         if self.previous_ts == 0:
             self.previous_ts = self.current_state.timestamp
 
@@ -125,17 +128,29 @@ class MMEnv(gym.Env):
         else:
             return value, False
 
+    def get_current_value(self):
+        return (
+            self.quote_asset
+            + self.base_asset
+            * (self.current_state.best_bid + self.current_state.best_ask)
+            / 2
+        )
+
     def _buy(self, price, amount):
+        logging.INFO(f"buying {amount} at {price}")
         self.quote_asset -= price * amount
         self.base_asset += amount
         self.bid = 0
         self.bid_size = 0
+        self.trade_counter += 1
 
     def _sell(self, price, amount):
+        logging.INFO(f"selling {amount} at {price}")
         self.quote_asset += price * amount
         self.base_asset -= amount
         self.ask = np.inf
         self.ask_size = 0
+        self.trade_counter += 1
 
     def get_values(self):
         return [

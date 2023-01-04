@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 from src.environments.mm_env import AgentBaseClass
 from src.environments.util import Trade
@@ -56,3 +57,7 @@ class ASAgent(AgentBaseClass):
         self.env.ask = reservation_price + spread / 2
         self.env.bid_size = 1
         self.env.ask_size = 1
+
+        logging.debug(
+            f"mid price: {mid_price}, bid: {self.env.bid}, ask: {self.env.ask}"
+        )
