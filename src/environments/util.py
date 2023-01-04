@@ -44,11 +44,9 @@ class FileManager:
 
 
 class Trade:
-    # 557111802,1.2373,10.0,12.373,1640044800076,false
-    def __init__(self, input_list):
-        self.timestamp = int(input_list[4])
-        self.price = float(input_list[1])
-        self.size = float(input_list[2])
+    def __init__(self, price, size):
+        self.price = price
+        self.size = size
 
 
 class CurrentState:
