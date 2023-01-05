@@ -42,11 +42,13 @@ class MMEnv(gym.Env):
         agent_parameters={},
         capital=1000,
         aggregation_window=10,
+        price_decimals=4,
     ):
         self.agent = agent(env=self, **agent_parameters)
         self.state_folder = state_folder
         self.capital = capital
         self.aggregation_window = aggregation_window
+        self.price_decimals = price_decimals
         self.reset()
 
     def reset(self):
@@ -73,6 +75,7 @@ class MMEnv(gym.Env):
         It also contains agent-specific data
           """
         self.current_state = self.state_manager.get_next_event()
+        self.previous_state = self.current_state
 
     def step(self, action):
         """
@@ -98,6 +101,7 @@ class MMEnv(gym.Env):
         while self.current_state.timestamp - self.previous_ts < self.aggregation_window:
             self.execute_market_orders()
             self.execute_limit_orders()
+            self.previous_state = self.current_state
             self.current_state = self.state_manager.get_next_event()
             if self.current_state is None:
                 return True
@@ -132,7 +136,7 @@ class MMEnv(gym.Env):
         return (
             self.quote_asset
             + self.base_asset
-            * (self.current_state.best_bid + self.current_state.best_ask)
+            * (self.previous_state.best_bid + self.previous_state.best_ask)
             / 2
         )
 
@@ -166,3 +170,7 @@ class MMEnv(gym.Env):
             self.exec_limit_buy,
             self.exec_limit_sell,
         ]
+
+    def round_prices(self):
+        self.bid = round(self.bid, self.price_decimals)
+        self.ask = round(self.ask, self.price_decimals)

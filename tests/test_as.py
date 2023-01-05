@@ -119,7 +119,7 @@ def test_env(caplog):
     caplog.set_level(logging.DEBUG)
     target = "./parsed_data/AvellanedaStoikov/AS_full.csv"
     agent_params = {"risk_aversion": 0.1}
-    env = MMEnv(target, ASAgent, agent_parameters=agent_params)
+    env = MMEnv(target, ASAgent, agent_parameters=agent_params, price_decimals=4)
     env.reset()
     for i in range(1000):
         env.step(None)
@@ -134,7 +134,7 @@ def test_env_full(caplog):
     caplog.set_level(logging.INFO)
     target = "./parsed_data/AvellanedaStoikov/AS_full.csv"
     agent_params = {"risk_aversion": 0.1}
-    env = MMEnv(target, ASAgent, agent_parameters=agent_params)
+    env = MMEnv(target, ASAgent, agent_parameters=agent_params, price_decimals=4)
     env.reset()
     while True:
         try:

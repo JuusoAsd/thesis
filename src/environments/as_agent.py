@@ -55,6 +55,7 @@ class ASAgent(AgentBaseClass):
 
         self.env.bid = reservation_price - spread / 2
         self.env.ask = reservation_price + spread / 2
+        self.env.round_prices()
         self.env.bid_size = 1
         self.env.ask_size = 1
 
