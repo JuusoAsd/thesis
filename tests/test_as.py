@@ -146,3 +146,45 @@ def test_env_full(caplog):
         f"Cash: {env.quote_asset}, inventory: {env.base_asset}, value: {env.get_current_value()}"
     )
     exit()
+
+
+def test_intensity_real():
+    file = (
+        "/home/juuso/Documents/hummingbot/local_v2/hummingbot/logs/intensity_sample.csv"
+    )
+    main_estimator = IntensityEstimator()
+    with open(file, "r") as f:
+        prices = []
+        lambdas = []
+        started = False
+        while True:
+            line = f.readline()
+            if line == "":
+                break
+            line = line.rstrip().split(",")
+            # print(line[0], len(line))
+            if started:
+                if line[0] == "prices":
+                    prices = [float(i) for i in line[1:]]
+                elif line[0] == "lambdas":
+                    lambdas = [float(i) for i in line[1:]]
+                elif line[0] == "intensity":
+                    intensity = float(line[1])
+                    # print(f"prices: {len(prices)}")
+                    # print(f"lambdas: {len(lambdas)}")
+                    (
+                        alpha,
+                        kappa,
+                    ) = main_estimator.fit_curve(prices, lambdas)
+                    main_estimator.alpha = alpha
+                    main_estimator.kappa = kappa
+                    print(
+                        f"Intensity: {intensity}, kappa: {kappa}, diff: {(intensity / main_estimator.kappa - 1) * 100}"
+                    )
+
+            if line[0] == "intensity":
+                try:
+                    float(line[1])
+                    started = True
+                except:
+                    pass
