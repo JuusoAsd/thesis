@@ -71,6 +71,14 @@ class IntensityEstimator:
         for i in price_levels:
             lambdas.append(self.trades[i])
         lambdas = np.array(lambdas)
+
+        alpha, kappa = self.fit_curve(price_levels, lambdas)
+
+        if alpha > 0 and kappa > 0:
+            self.alpha = alpha
+            self.kappa = kappa
+
+    def fit_curve(self, price_levels, lambdas):
         try:
             param, _ = curve_fit(
                 f=curve_func,
@@ -80,19 +88,17 @@ class IntensityEstimator:
                 method="dogbox",
                 bounds=([0, 0], [np.inf, np.inf]),
             )
-            self.alpha = param[0]
-            self.kappa = param[1]
+            alpha = param[0]
+            kappa = param[1]
+            return alpha, kappa
+
         except RuntimeError as e:
             logging.error(f"Failed estimating parameters for intensity")
         except Exception as e:
             logging.error(f"Error fitting curve for intensity")
-            logging.error(f"price_levels: {price_levels}")
-            logging.error(f"lambdas: {lambdas}")
+            # logging.error(f"price_levels: {price_levels}")
+            # logging.error(f"lambdas: {lambdas}")
             raise e
-        if self.alpha <= 0:
-            self.alpha = 1
-        if self.kappa <= 0:
-            self.kappa = 1
 
     def get_current_estimate(self, ts):
         if ts >= self.previous_update + self.update_interval:
@@ -118,41 +124,43 @@ class VolatilityEstimator:
         self.return_aggregation = return_aggregation
         self.update_interval = update_interval
 
-        self.previous_price = 0
-        self.previous_return_ts = 0
+        self.previous_ts = 0
 
-        self.returns = []
-        self.return_count = 0
+        self.prices = []
 
         self.volatility = 0
         self.previous_update = 0
 
     def update_prices(self, new_price, ts):
         if self.previous_price == 0:
-            self.previous_price = new_price
-            self.previous_return_ts = ts
-        elif ts >= self.previous_return_ts + self.return_aggregation:
-            ret = new_price / self.previous_price - 1
-            self.returns.append(ret)
-            self.return_count += 1
-            self.previous_price = new_price
-            self.previous_return_ts = ts
+            self.previous_ts = ts
+        elif ts >= self.previous_ts + self.return_aggregation:
+            self.prices.append(new_price)
+            self.previous_ts = ts
 
-    def calculate_volatility(self):
+    def calculate_volatility_real(self):
         """
         Vol = std(returns)
         Annualized vol = vol * sqrt(aggregation periods per year)
             - aggregation period is in milliseconds
         """
-        return_arr = np.array(self.returns)
+        a = np.array(self.prices)
+        return_arr = np.diff(a) / a[:, 1:]
         vol = np.std(return_arr)
         self.volatility = vol * np.sqrt(
             (1000 * 60 * 60 * 24 * 365) / self.return_aggregation
         )
 
+    def calculate_volatility_hummingbot(self):
+        """
+        Calculates price volatility instead of percentage volatility
+        """
+        arr = np.array(self.prices)
+        self.volatility = np.sqrt(np.sum(np.square(np.diff(arr))) / arr.size)
+
     def get_current_estimate(self, ts):
         if ts >= self.previous_update + self.update_interval:
-            self.calculate_volatility()
+            self.calculate_volatility_hummingbot()
             self.previous_update = ts
         return self.volatility
 
