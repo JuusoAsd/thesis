@@ -39,10 +39,10 @@ class MMEnv(gym.Env):
         self,
         state_folder,
         agent: AgentBaseClass,
-        agent_parameters={},
-        capital=1000,
-        aggregation_window=10,
-        price_decimals=4,
+        agent_parameters={},  # parameters for agent initialization
+        capital=1000,  # initial capital
+        aggregation_window=10_000,  # minimum time between agent actions (ms)
+        price_decimals=4,  # how many decimals to round prices to
     ):
         self.agent = agent(env=self, **agent_parameters)
         self.state_folder = state_folder
@@ -121,9 +121,9 @@ class MMEnv(gym.Env):
     def execute_limit_orders(self):
         if self.current_state.trade is not None:
             if self.current_state.trade.price <= self.bid:
-                self.buy(self.bid, self.bid_size)
+                self._buy(self.bid, self.bid_size)
             elif self.current_state.trade.price >= self.ask:
-                self.sell(self.ask, self.ask_size)
+                self._sell(self.ask, self.ask_size)
 
     def get_total_value(self, mid_price):
         value = self.quote_asset + self.base_asset * mid_price
@@ -141,7 +141,7 @@ class MMEnv(gym.Env):
         )
 
     def _buy(self, price, amount):
-        logging.INFO(f"buying {amount} at {price}")
+        logging.info(f"buying {amount} at {price}")
         self.quote_asset -= price * amount
         self.base_asset += amount
         self.bid = 0
@@ -149,7 +149,7 @@ class MMEnv(gym.Env):
         self.trade_counter += 1
 
     def _sell(self, price, amount):
-        logging.INFO(f"selling {amount} at {price}")
+        logging.info(f"selling {amount} at {price}")
         self.quote_asset += price * amount
         self.base_asset -= amount
         self.ask = np.inf
