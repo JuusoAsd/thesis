@@ -188,3 +188,22 @@ def test_intensity_real():
                     started = True
                 except:
                     pass
+
+
+def test_volatility_real():
+    file = "/home/juuso/Documents/hummingbot/local_v2/hummingbot/logs/volatility_sample.csv"
+    main_estimator = VolatilityEstimator()
+    with open(file, "r") as f:
+        while True:
+            line = f.readline()
+            if line == "":
+                break
+            line = line.rstrip().split(",")
+            if line[0] == "buffer":
+                float_prices = [float(i) for i in line[1:]]
+                main_estimator.prices = float_prices
+                main_estimator.calculate_volatility_hummingbot()
+                calc_vol = main_estimator.volatility
+            else:
+                print(f"Hummingbot: {line[1]}, calculated: {calc_vol}")
+    exit()
