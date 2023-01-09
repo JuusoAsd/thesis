@@ -33,6 +33,9 @@ class ASAgent(AgentBaseClass):
     def reset(self):
         pass
 
+    def get_inventory(self, mid_price):
+        return self.env.base_asset + self.env.base_asset / mid_price
+
     def step(self):
         """
         Set bid and ask prices based on the current state
@@ -46,10 +49,10 @@ class ASAgent(AgentBaseClass):
         ) / 2
         vol = self.env.current_state.vol
         intensity = self.env.current_state.intensity
-        inventory = self.env.base_asset
+        inventory = self.get_inventory(mid_price)
 
-        reservation_price = mid_price - inventory * vol**2 * self.risk_aversion
-        spread = vol**2 * self.risk_aversion + 2 / self.risk_aversion * np.log(
+        reservation_price = mid_price - inventory * vol * self.risk_aversion
+        spread = vol * self.risk_aversion + 2 / self.risk_aversion * np.log(
             1 + self.risk_aversion / intensity
         )
 
@@ -60,5 +63,5 @@ class ASAgent(AgentBaseClass):
         self.env.ask_size = 1
 
         logging.debug(
-            f"mid price: {mid_price}, bid: {self.env.bid}, ask: {self.env.ask}"
+            f"mid price: {mid_price}, bid: {self.env.bid}, ask: {self.env.ask}, inventory: {inventory}, vol: {vol}, intensity: {intensity}"
         )
