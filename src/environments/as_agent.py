@@ -1,10 +1,10 @@
 import logging
 import numpy as np
-from src.environments.mm_env import AgentBaseClass
+from src.environments.mm_env import AgentBaseClass, CurrentStateBaseClass
 from src.environments.util import Trade
 
 
-class ASData:
+class ASData(CurrentStateBaseClass):
     def __init__(self, val):
         self.timestamp = int(val[0])
         self.best_bid = float(val[1])
@@ -17,6 +17,7 @@ class ASData:
             self.trade = None
         self.vol = float(val[5])
         self.intensity = float(val[6])
+        self.mid_price = (self.best_ask + self.best_bid) / 2
 
 
 class ASAgent(AgentBaseClass):
@@ -44,9 +45,7 @@ class ASAgent(AgentBaseClass):
         spread = vol ^ 2 * risk_aversion (* terminal time) + 2/risk_aversion * ln(1 + risk_aversion / intensity)
         """
 
-        mid_price = (
-            self.env.current_state.best_ask + self.env.current_state.best_bid
-        ) / 2
+        mid_price = round(self.env.current_state.mid_price, self.env.price_decimals)
         vol = self.env.current_state.vol
         intensity = self.env.current_state.intensity
         inventory = self.get_inventory(mid_price)
@@ -62,6 +61,14 @@ class ASAgent(AgentBaseClass):
         self.env.bid_size = 1
         self.env.ask_size = 1
 
+        if self.env.logging:
+            self.env.logger.info(
+                f"update,{self.env.current_state.timestamp},{self.env.bid},{self.env.ask},{mid_price},{vol},{intensity},{inventory},{reservation_price},{spread}"
+            )
         logging.debug(
             f"mid price: {mid_price}, bid: {self.env.bid}, ask: {self.env.ask}, inventory: {inventory}, vol: {vol}, intensity: {intensity}"
         )
+
+    def small_step(self):
+        # not used because intensity and volatility are pre-calculated to the data
+        pass

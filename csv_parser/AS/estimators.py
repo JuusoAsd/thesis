@@ -94,6 +94,7 @@ class IntensityEstimator:
 
         except RuntimeError as e:
             logging.error(f"Failed estimating parameters for intensity")
+            return self.alpha, self.kappa
         except Exception as e:
             logging.error(f"Error fitting curve for intensity")
             # logging.error(f"price_levels: {price_levels}")
@@ -132,7 +133,7 @@ class VolatilityEstimator:
         self.previous_update = 0
 
     def update_prices(self, new_price, ts):
-        if self.previous_price == 0:
+        if self.previous_ts == 0:
             self.previous_ts = ts
         elif ts >= self.previous_ts + self.return_aggregation:
             self.prices.append(new_price)

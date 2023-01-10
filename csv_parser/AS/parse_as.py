@@ -63,3 +63,5 @@ def parse_as_full():
                 ]
             )
         current_state = as_files.get_next_event()
+        if count % 100_000 == 0:
+            print(f"Processed {count} lines")

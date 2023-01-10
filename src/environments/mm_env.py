@@ -34,21 +34,30 @@ class AgentBaseClass:
         raise NotImplementedError(f"step not implemented for {self.__class__.__name__}")
 
 
+class CurrentStateBaseClass:
+    def __init__(self):
+        self.timestamp = 1
+
+
 class MMEnv(gym.Env):
     def __init__(
         self,
         state_folder,
         agent: AgentBaseClass,
+        logger,
         agent_parameters={},  # parameters for agent initialization
         capital=1000,  # initial capital
-        aggregation_window=10_000,  # minimum time between agent actions (ms)
+        step_aggregation=10_000,  # minimum time between agent actions (ms)
         price_decimals=4,  # how many decimals to round prices to
+        logging=False,
     ):
         self.agent = agent(env=self, **agent_parameters)
         self.state_folder = state_folder
         self.capital = capital
-        self.aggregation_window = aggregation_window
+        self.step_interval = step_aggregation
         self.price_decimals = price_decimals
+        self.logger = logger
+        self.logging = logging
         self.reset()
 
     def reset(self):
@@ -97,8 +106,13 @@ class MMEnv(gym.Env):
         if self.previous_ts == 0:
             self.previous_ts = self.current_state.timestamp
 
-        # Only update orders when aggregation_window has passed since previous update, still execute trades if exist
-        while self.current_state.timestamp - self.previous_ts < self.aggregation_window:
+        # Only update orders when stap_interval has passed since previous update, still execute trades if happen
+        # also update indicators with small_step
+        self.current_state = self.state_manager.get_next_event()
+        if self.current_state is None:
+            return True
+        while self.current_state.timestamp - self.previous_ts < self.step_interval:
+            self.agent.small_step()
             self.execute_market_orders()
             self.execute_limit_orders()
             self.previous_state = self.current_state
@@ -113,17 +127,42 @@ class MMEnv(gym.Env):
         market orders are executed at at best bid-ask
         """
         if self.ask <= self.current_state.best_bid and self.ask_size > 0:
-            self._sell(self.current_state.best_bid, self.ask_size)
+            sell_price = self.current_state.best_bid
+            sell_size = self.ask_size
+            self._sell(sell_price, sell_size)
+            if self.logging:
+                self.logger.info(
+                    f"action,{self.current_state.timestamp},market_sell,{sell_price},{sell_size},{self.current_state.mid_price},{self.base_asset},{self.quote_asset}"
+                )
 
         if self.bid >= self.current_state.best_ask and self.bid_size > 0:
-            self._buy(self.current_state.best_ask, self.bid_size)
+            buy_price = self.current_state.best_ask
+            buy_size = self.bid_size
+            self._buy(buy_price, buy_size)
+            if self.logging:
+                self.logger.info(
+                    f"action,{self.current_state.timestamp},market_buy,{buy_price},{buy_size},{self.current_state.mid_price},{self.base_asset},{self.quote_asset}"
+                )
 
     def execute_limit_orders(self):
         if self.current_state.trade is not None:
-            if self.current_state.trade.price <= self.bid:
-                self._buy(self.bid, self.bid_size)
-            elif self.current_state.trade.price >= self.ask:
-                self._sell(self.ask, self.ask_size)
+            if self.current_state.trade.price <= self.bid and self.bid_size > 0:
+                bid_price = self.bid
+                bid_size = self.bid_size
+                self._buy(bid_price, bid_size)
+                if self.logging:
+                    self.logger.info(
+                        f"action,{self.current_state.timestamp},limit_buy,{bid_price},{bid_size},{self.current_state.mid_price},{self.base_asset},{self.quote_asset}"
+                    )
+
+            elif self.current_state.trade.price >= self.ask and self.ask_size > 0:
+                ask_price = self.ask
+                ask_size = self.ask_size
+                self._sell(ask_price, ask_size)
+                if self.logging:
+                    self.logger.info(
+                        f"action,{self.current_state.timestamp},limit_sell,{ask_price},{ask_size},{self.current_state.mid_price},{self.base_asset},{self.quote_asset}"
+                    )
 
     def get_total_value(self, mid_price):
         value = self.quote_asset + self.base_asset * mid_price
@@ -141,7 +180,6 @@ class MMEnv(gym.Env):
         )
 
     def _buy(self, price, amount):
-        logging.info(f"buying {amount} at {price}")
         self.quote_asset -= price * amount
         self.base_asset += amount
         self.bid = 0
@@ -149,7 +187,6 @@ class MMEnv(gym.Env):
         self.trade_counter += 1
 
     def _sell(self, price, amount):
-        logging.info(f"selling {amount} at {price}")
         self.quote_asset += price * amount
         self.base_asset -= amount
         self.ask = np.inf
