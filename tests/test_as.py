@@ -1,9 +1,7 @@
 import math
 import logging
-import numpy as np
-from scipy.optimize import curve_fit
-from csv_parser.AS.intensity import IntensityEstimator, curve_func
-from csv_parser.AS.volatility import VolatilityEstimator
+from csv_parser.AS.estimators import IntensityEstimator, curve_func
+from csv_parser.AS.estimators import VolatilityEstimator
 import pandas as pd
 
 
@@ -11,9 +9,7 @@ def test_read_line_trades(caplog):
     caplog.set_level(logging.INFO)
 
     n = 0
-    filepath = (
-        "/home/juuso/Documents/gradu/parsed_data/AvellanedaStoikov/data_reverse.csv"
-    )
+    filepath = "./parsed_data/AvellanedaStoikov/data_reverse.csv"
     with open(
         filepath,
         "r",
@@ -78,7 +74,7 @@ def test_hummingbot(caplog):
 
 
 def test_as_orderbook():
-    filepath = "/home/juuso/Documents/gradu/parsed_data/orderbook/2021-12-21.csv"
+    filepath = "./parsed_data/orderbook/2021-12-21.csv"
     every_n = 1000
     every_write = 1_000_00
     n = 0
@@ -107,3 +103,118 @@ def test_as_orderbook():
                 print(main_estimator.trades)
 
             n += 1
+
+
+def test_parse_full():
+    from csv_parser.AS.parse_as import parse_as_full
+
+    parse_as_full()
+
+
+from src.environments.as_agent import ASAgent
+from src.environments.mm_env import MMEnv
+
+
+def test_env(caplog):
+    caplog.set_level(logging.DEBUG)
+    target = "./parsed_data/AvellanedaStoikov/AS_full.csv"
+    agent_params = {"risk_aversion": 0.1}
+    logging.basicConfig(
+        filename=".logs/as_env_sample.log", encoding="utf-8", level=logging.INFO
+    )
+    env = MMEnv(
+        target,
+        ASAgent,
+        agent_parameters=agent_params,
+        price_decimals=4,
+        step_aggregation=1_000,
+        logging=True,
+        logger=logging.getLogger(__name__),
+    )
+    env.reset()
+    for i in range(1000):
+        env.step(None)
+
+    print(
+        f"Cash: {env.quote_asset}, inventory: {env.base_asset}, value: {env.get_current_value()}"
+    )
+    exit()
+
+
+def test_env_full(caplog):
+    caplog.set_level(logging.INFO)
+    target = "./parsed_data/AvellanedaStoikov/AS_full.csv"
+    agent_params = {"risk_aversion": 0.1}
+    env = MMEnv(target, ASAgent, agent_parameters=agent_params, price_decimals=4)
+    env.reset()
+    while True:
+        try:
+            env.step(None)
+        except Exception as e:
+            print(e)
+            break
+    print(
+        f"Cash: {env.quote_asset}, inventory: {env.base_asset}, value: {env.get_current_value()}"
+    )
+    exit()
+
+
+def test_intensity_real():
+    file = (
+        "/home/juuso/Documents/hummingbot/local_v2/hummingbot/logs/intensity_sample.csv"
+    )
+    main_estimator = IntensityEstimator()
+    with open(file, "r") as f:
+        prices = []
+        lambdas = []
+        started = False
+        while True:
+            line = f.readline()
+            if line == "":
+                break
+            line = line.rstrip().split(",")
+            # print(line[0], len(line))
+            if started:
+                if line[0] == "prices":
+                    prices = [float(i) for i in line[1:]]
+                elif line[0] == "lambdas":
+                    lambdas = [float(i) for i in line[1:]]
+                elif line[0] == "intensity":
+                    intensity = float(line[1])
+                    # print(f"prices: {len(prices)}")
+                    # print(f"lambdas: {len(lambdas)}")
+                    (
+                        alpha,
+                        kappa,
+                    ) = main_estimator.fit_curve(prices, lambdas)
+                    main_estimator.alpha = alpha
+                    main_estimator.kappa = kappa
+                    print(
+                        f"Intensity: {intensity}, kappa: {kappa}, diff: {(intensity / main_estimator.kappa - 1) * 100}"
+                    )
+
+            if line[0] == "intensity":
+                try:
+                    float(line[1])
+                    started = True
+                except:
+                    pass
+
+
+def test_volatility_real():
+    file = "/home/juuso/Documents/hummingbot/local_v2/hummingbot/logs/volatility_sample.csv"
+    main_estimator = VolatilityEstimator()
+    with open(file, "r") as f:
+        while True:
+            line = f.readline()
+            if line == "":
+                break
+            line = line.rstrip().split(",")
+            if line[0] == "buffer":
+                float_prices = [float(i) for i in line[1:]]
+                main_estimator.prices = float_prices
+                main_estimator.calculate_volatility_hummingbot()
+                calc_vol = main_estimator.volatility
+            else:
+                print(f"Hummingbot: {line[1]}, calculated: {calc_vol}")
+    exit()
