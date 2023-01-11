@@ -29,7 +29,9 @@ if __name__ == "__main__":
     #     env.step(None)
     while True:
         try:
-            env.step(None)
+            done = env.step(None)
+            if done:
+                break
         except Exception as e:
             print(e)
             break
