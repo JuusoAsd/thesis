@@ -26,16 +26,21 @@ class ASAgent(AgentBaseClass):
     Requires trades and order book midprice and uses those to calculate the indifference price and spread
     """
 
-    def __init__(self, env, risk_aversion):
+    def __init__(self, env, risk_aversion, inventory_target=0):
         super().__init__(env)
         self.data_type = ASData
         self.risk_aversion = risk_aversion
+        self.inventory_target = inventory_target  # % target of total holdings
 
     def reset(self):
         pass
 
     def get_inventory(self, mid_price):
-        return self.env.base_asset + self.env.base_asset / mid_price
+        return (
+            self.env.base_asset
+            / (self.env.base_asset + self.env.quote_asset / mid_price)
+            - self.inventory_target
+        )
 
     def step(self):
         """
