@@ -79,7 +79,7 @@ fn verify_snapshot_update_match() {
     }
 }
 
-
+'''
             if record.side == Side::Ask {
                 if level.size == dec!(0) {
                     orderbook.asks.remove(&record.price);
@@ -108,3 +108,4 @@ fn verify_snapshot_update_match() {
                     }
                 }
             }
+'''

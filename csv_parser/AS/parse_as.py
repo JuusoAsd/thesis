@@ -6,13 +6,14 @@ import logging
 
 
 def parse_as_full():
+    
     """
     Parse AS agent data and save it to a single CSV file / folder of files
     PARSED DATA:
         timestamp, best bid, best ask, (trade price/0, trade size/0), current vol estimate, current intensity
     """
-    as_files = FileManager("./parsed_data/AvellanedaStoikov/data.csv", headers=True)
-    target_file = open(f"./parsed_data/AvellanedaStoikov/AS_full.csv", "w+")
+    as_files = FileManager(r"C:\Users\Ville\Documents\gradu\parsed_data\AS\data.csv", headers=True)
+    target_file = open(r"C:\Users\Ville\Documents\gradu\parsed_data\AS\data_full.csv", "w+", newline="")
     columns = [
         "timestamp",
         "best_bid",

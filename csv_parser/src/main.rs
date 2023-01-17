@@ -58,17 +58,17 @@ fn parse_data_v2() {
 }
 
 fn parse_data_AS() {
-    let file_count = 2;
-    // let target_path =
-    //     PathBuf::from(r"C:\Users\Ville\Documents\gradu\parsed_data\AS\data.csv");
+    let file_count = 0;
     let target_path =
-        PathBuf::from("/home/juuso/Documents/gradu/parsed_data/AvellanedaStoikov/data.csv");
+        PathBuf::from(r"C:\Users\Ville\Documents\gradu\parsed_data\AS\data.csv");
+    //let target_path =
+        //PathBuf::from("/home/juuso/Documents/gradu/parsed_data/AvellanedaStoikov/data.csv");
     let timestamp_aggregation = 10;
 
-    // let update_path =
-    // PathBuf::from(r"C:\Users\Ville\Documents\gradu\data\ADAUSDT_T_DEPTH_2021-12-21");
     let update_path =
-        PathBuf::from("/media/juuso/5655B83E58A8FD4F/orderbook/ADAUSDT_T_DEPTH_202211031113(1)");
+        PathBuf::from(r"C:\Users\Ville\Documents\gradu\data\ADAUSDT_T_DEPTH_2021-12-21");
+    //let update_path =
+        //PathBuf::from("/media/juuso/5655B83E58A8FD4F/orderbook/ADAUSDT_T_DEPTH_202211031113(1)");
     let update_headers = StringRecord::from(vec![
         "symbol",
         "timestamp",
@@ -81,8 +81,8 @@ fn parse_data_AS() {
         "pu",
     ]);
 
-    // let trade_path = PathBuf::from(r"C:\Users\Ville\Documents\gradu\data\trades");
-    let trade_path = PathBuf::from("/media/juuso/5655B83E58A8FD4F/trades");
+    let trade_path = PathBuf::from(r"C:\Users\Ville\Documents\gradu\data\trades");
+    //let trade_path = PathBuf::from("/media/juuso/5655B83E58A8FD4F/trades");
     let trade_header = StringRecord::from(vec![
         "trade_id",
         "price",
