@@ -28,15 +28,14 @@ fn parse_data_v2() {
     //  - OB(t+n)
 
     let file_count = 1;
-    // let target_path = PathBuf::from("/C:/Users/Ville/Documents/gradu/data");
-    let target_path = PathBuf::from("/home/juuso/Documents/gradu/parsed_data/orderbook");
+    let target_path = PathBuf::from(r"C:\Users\Ville\Documents\gradu\parsed_data\orderbook");
+    //let target_path = PathBuf::from("/home/juuso/Documents/gradu/parsed_data/orderbook");
     let tracked_levels = 25;
     let timestamp_aggregation = 10;
 
+    let folder_path = PathBuf::from(r"C:\Users\Ville\Documents\gradu\data\ADAUSDT_T_DEPTH_2021-12-21");
     // let folder_path =
-    //     PathBuf::from("/C:/Users/Ville/Documents/gradu/data/ADAUSDT_T_DEPTH_2021-12-21");
-    let folder_path =
-        PathBuf::from("/media/juuso/5655B83E58A8FD4F/orderbook/ADAUSDT_T_DEPTH_202211031113(1)");
+       // PathBuf::from("/media/juuso/5655B83E58A8FD4F/orderbook/ADAUSDT_T_DEPTH_202211031113(1)");
     let first_snapshot_file: PathBuf = get_first_snapshot_file(&folder_path).unwrap();
     let update_files = get_folder_update_files(&folder_path);
     let (first_ts, ob) = parse_snapshot(&first_snapshot_file, 0);
@@ -135,5 +134,5 @@ fn test_filehandler() {
     }
 }
 fn main() {
-    parse_data_AS();
+    parse_data_v2();
 }

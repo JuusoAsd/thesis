@@ -2,6 +2,8 @@ import os
 import logging
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.evaluation import evaluate_policy
 import time
 import pandas as pd
 import numpy as np
@@ -48,6 +50,7 @@ class FileManager:
 
 
 class MMFullOrderbookSnapshotEnv(gym.Env):
+
     def __init__(self, trades_folder, orderbook_folder, mid_price, capital=1000):
         """
         Goal of this environment is to do deep reinforcement learning on the full orderbook and possibly in the future some infered statistics of it to help converging.
@@ -61,9 +64,13 @@ class MMFullOrderbookSnapshotEnv(gym.Env):
         self.orderbook_folder = orderbook_folder
         self.capital = capital
         self.reset()
-
+        '''
+        Normalize action spaces as most reinforcement learning algorithms rely on a Gaussian distribution
+        for continuous actions. Best to have an interval range of 2 (low = -1, high = 1).
+        However, normalizing the action space did not provide any better results so far..
+        '''
         self.action_space = spaces.Box(
-            low=0, high=1_000_000, shape=(4,), dtype=np.float32
+            low=-1, high=1, shape=(4,), dtype=np.float32
         )
 
         self.observation_space = spaces.Box(
@@ -197,18 +204,31 @@ class MMFullOrderbookSnapshotEnv(gym.Env):
         ]
 
 
-trades = "/home/juuso/Documents/gradu/parsed_data/trades"
-orderbook = "/home/juuso/Documents/gradu/parsed_data/orderbook"
-model_path = "/home/juuso/Documents/gradu/src/models/ppo_mm_full_orderbook"
-normalize_path = (
-    "/home/juuso/Documents/gradu/src/models/mm_full_orderbook_normalize.pkl"
-)
+#trades = "/home/juuso/Documents/gradu/parsed_data/trades"
+trades = r"C:\Users\Ville\Documents\gradu\data\trades"
+#orderbook = r"/home/juuso/Documents/gradu/parsed_data/orderbook"
+orderbook = r"C:\Users\Ville\Documents\gradu\parsed_data\orderbook"
+#model_path = "/home/juuso/Documents/gradu/src/models/ppo_mm_full_orderbook"
+model_path = r"C:\Users\Ville\Documents\gradu\gradu\src\models"
+#normalize_path = ("/home/juuso/Documents/gradu/src/models/mm_full_orderbook_normalize.pkl")
+normalize_path = r"C:\Users\Ville\Documents\gradu\gradu\src\models\mm_full_orderbook_normalize.pkl"
+
+'''for vectorized envs the following could work (it did not):
+# num_cpu = 4
+# env = SubprocVecEnv([MMFullOrderbookSnapshotEnv(trades, orderbook, 1.2) for i in range(num_cpu)])
+'''
 env = MMFullOrderbookSnapshotEnv(trades, orderbook, 1.2)
 env = NormalizeObservation(env)
 print(env.reset())
 # check_env(env)
 
 model = PPO("MlpPolicy", env, verbose=1)
+model.learn(total_timesteps=2_000)
+
+# Creating a separate environment for evaluation
+eval_env = MMFullOrderbookSnapshotEnv(trades, orderbook, 1.2)
+mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=10)
+print(f'Mean reward: {mean_reward} +/- {std_reward:.2f}')
 
 
 def train():
