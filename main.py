@@ -5,8 +5,9 @@ from csv_parser.AS.parse_as import parse_as_full
 import time
 
 if __name__ == "__main__":
+    # target = "./parsed_data/AvellanedaStoikov/AS_full.csv"
     target = r"C:\Users\Ville\Documents\gradu\parsed_data\AS\data_full.csv"
-    agent_params = {"risk_aversion": 0.5}
+    agent_params = {"risk_aversion": 0.1}
 
     # get current timestamp
     ts = time.time()

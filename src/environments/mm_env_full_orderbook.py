@@ -93,7 +93,8 @@ class MMFullOrderbookSnapshotEnv(gym.Env):
         self.exec_market_sell = 0
         self.exec_limit_buy = 0
         self.exec_limit_sell = 0
-
+        self.trade_asks = []
+        self.trade_bids = []
         self.trades_manager = FileManager(self.trades_folder, Trade)
         self.orderbook_manager = FileManager(self.orderbook_folder)
 
@@ -127,6 +128,7 @@ class MMFullOrderbookSnapshotEnv(gym.Env):
 
         self.execute_market_orders()
         self.execute_limit_orders(timestamp)
+        self.calculate_OSI()
 
         current_value, liquidated = self.get_total_value(self.mid_price)
         if liquidated:
@@ -156,9 +158,18 @@ class MMFullOrderbookSnapshotEnv(gym.Env):
             self.exec_market_buy = 1
 
     def execute_limit_orders(self, timestamp):
+        # Does this assume that our agent participates in every single trade?
         while self.current_trade.timestamp <= timestamp:
             self.execute_trade(self.current_trade)
+
+            # adding these lines of code to append the sizes of bid and ask trades for OSI calculation
+            if self.current_trade.price < self.mid_price:
+                self.trade_bids.append([self.current_trade.timestamp, self.current_trade.size])
+            elif self.current_trade.price > self.mid_price:
+                self.trade_asks.append([self.current_trade.timestamp, self.current_trade.size])
+
             self.current_trade = self.trades_manager.get_next_event()
+
 
     def execute_trade(self, trade):
         # check if our current bid is hit
@@ -175,6 +186,26 @@ class MMFullOrderbookSnapshotEnv(gym.Env):
             return value, True
         else:
             return value, False
+
+
+    def calculate_OSI(self):
+        '''
+        Function for calculating OSI. Currently updates OSI every hour.
+        self.trade_bids/asks are two dimensional arrays formed like this [[timestamp, size]]
+        This function sorts the trades by size and takes the 90% quantile sized trades for OSI calculation.
+        '''
+        update_frequency = 60 * 60
+        if ((self.trade_bids[0][0] - self.trade_bids[-1][0])) >= update_frequency or ((self.trade_asks[0][0] - self.trade_asks[-1][0])) >= update_frequency:
+            bids, asks = np.array(self.trade_bids), np.array(self.trade_asks)
+            bids, asks = bids[:,1], asks[:,1]
+            bids_sorted_index, asks_sorted_index  = np.argsort(bids), np.argsort(asks)
+            sorted_bids, sorted_asks  = bids[bids_sorted_index], asks[asks_sorted_index]
+            bids_values, asks_values = round(bids.size / 10), round(asks.size / 10)
+            decile90_bids, decile90_asks = np.sum(sorted_bids[-bids_values : ]), np.sum(sorted_asks[-asks_values : ])
+            OSI = 100 * ((decile90_bids - decile90_asks) / (decile90_bids + decile90_asks))
+            self.trade_bids = []
+            self.trade_asks = []
+
 
     def _buy(self, price, amount):
         self.quote_asset -= price * amount
