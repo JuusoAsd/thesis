@@ -1,4 +1,5 @@
 import os
+import numpy as np
 
 
 class FileManager:
@@ -79,3 +80,16 @@ class StateManager:
         """Want to make sure that the first trade is JUST before the first orderbook"""
         current_ob = self.orderbook_manager.get_next_event()
         current_trade = self.trades_manager.get_next_event()
+
+
+class ASState:
+    def __init__(self, input_list):
+        # bid, ask, trade price, trade size, vol, intensity
+        self.timestamp = float(input_list[0])
+        self.best_bid = float(input_list[1])
+        self.best_ask = float(input_list[2])
+        self.mid_price = (self.best_bid + self.best_ask) / 2
+        self.trade_price = float(input_list[3])
+        self.trade_size = float(input_list[4])
+        self.vol = float(input_list[5])
+        self.intensity = float(input_list[6])
