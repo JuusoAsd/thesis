@@ -131,9 +131,12 @@ class MMEnv(gym.Env):
         start_value = self.get_total_value()
 
         # 3)
+        previous_state = self.current_state
         self.current_state = self.state_manager.get_next_event()
         if self.current_state is None:
-            exit()
+            self.current_state = previous_state
+            observation = self.policy.get_observation()
+            return observation, 0, True, {}
 
         # 3) between steps, some time passes determined by step_interval
         while self.current_state.timestamp - self.previous_ts < self.step_interval:
@@ -142,7 +145,9 @@ class MMEnv(gym.Env):
             self.previous_state = self.current_state
             self.current_state = self.state_manager.get_next_event()
             if self.current_state is None:
-                exit()
+                self.current_state = previous_state
+                observation = self.policy.get_observation()
+                return observation, 0, True, {}
         self.previous_ts = self.current_state.timestamp
 
         # 4)
