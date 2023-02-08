@@ -4,7 +4,9 @@ mod file_util;
 mod orderbook_util;
 mod parse_util;
 use file_util::{get_first_snapshot_file, get_folder_files, get_folder_update_files, FileHandler};
-use parse_util::{parse_records_avellaneda_stoikov, parse_snapshot, parse_updates_v2};
+use parse_util::{
+    parse_records_aggregate_ts, parse_records_avellaneda_stoikov, parse_snapshot, parse_updates_v2,
+};
 
 fn parse_data_v1() {
     // v1 parses data as follows:
@@ -119,21 +121,66 @@ fn parse_data_AS() {
     )
 }
 
-fn test_filehandler() {
-    let headers = StringRecord::from(vec!["one", "two", "three"]);
-    let files = vec![
-        PathBuf::from("/home/juuso/Documents/gradu/tests/test_csv/test1.csv"),
-        PathBuf::from("/home/juuso/Documents/gradu/tests/test_csv/test2.csv"),
-    ];
-    let mut handler = FileHandler::new(files, headers, false);
+fn parse_data_time_aggregation() {
+    let file_count = 2;
+    // let target_path =
+    //     PathBuf::from(r"C:\Users\Ville\Documents\gradu\parsed_data\AS\data.csv");
+    let target_path = PathBuf::from("/home/juuso/Documents/gradu/parsed_data/aggregated/data.csv");
+    let timestamp_aggregation = 1000;
 
-    loop {
-        match handler.next() {
-            Some(record) => println!("{:?}", record),
-            None => break,
-        }
-    }
+    // let update_path =
+    // PathBuf::from(r"C:\Users\Ville\Documents\gradu\data\ADAUSDT_T_DEPTH_2021-12-21");
+    let update_path =
+        PathBuf::from("/media/juuso/5655B83E58A8FD4F/orderbook/ADAUSDT_T_DEPTH_202211031113(1)");
+    let update_headers = StringRecord::from(vec![
+        "symbol",
+        "timestamp",
+        "first_update_id",
+        "last_update_id",
+        "side",
+        "update_type",
+        "price",
+        "qty",
+        "pu",
+    ]);
+
+    // let trade_path = PathBuf::from(r"C:\Users\Ville\Documents\gradu\data\trades");
+    let trade_path = PathBuf::from("/media/juuso/5655B83E58A8FD4F/trades");
+    let trade_header = StringRecord::from(vec![
+        "trade_id",
+        "price",
+        "qty",
+        "total_value",
+        "timestamp",
+        "is_buyer_maker",
+    ]);
+
+    let first_snapshot_file: PathBuf = get_first_snapshot_file(&update_path).unwrap();
+    let update_files = get_folder_update_files(&update_path);
+    let trade_files = get_folder_files(&trade_path);
+    let (first_ts, ob) = parse_snapshot(&first_snapshot_file, 0);
+
+    let (update_files_used, trade_files_used) = if file_count != 0 {
+        (
+            update_files[0..file_count].to_vec(),
+            trade_files[0..file_count].to_vec(),
+        )
+    } else {
+        (update_files, trade_files)
+    };
+
+    let mut update_handler: FileHandler = FileHandler::new(update_files_used, update_headers, true);
+    let mut trade_handler: FileHandler = FileHandler::new(trade_files_used, trade_header, false);
+    parse_records_aggregate_ts(
+        first_ts,
+        i64::MAX,
+        timestamp_aggregation,
+        &target_path,
+        update_handler,
+        trade_handler,
+        ob,
+    )
 }
 fn main() {
-    parse_data_AS();
+    parse_data_time_aggregation();
 }

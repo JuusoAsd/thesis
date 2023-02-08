@@ -103,6 +103,39 @@ impl ASRecord {
     }
 }
 
+#[derive(Debug, Serialize)]
+pub struct AggregateRecord {
+    timestamp: i64,
+    best_bid: Decimal,
+    best_ask: Decimal,
+    low_price: Decimal,
+    high_price: Decimal,
+    buy_volume: Decimal,
+    sell_volume: Decimal,
+}
+
+impl AggregateRecord {
+    pub fn new(
+        timestamp: i64,
+        best_bid: Decimal,
+        best_ask: Decimal,
+        low_price: Decimal,
+        high_price: Decimal,
+        buy_volume: Decimal,
+        sell_volume: Decimal,
+    ) -> Self {
+        Self {
+            timestamp,
+            best_bid,
+            best_ask,
+            low_price,
+            high_price,
+            buy_volume,
+            sell_volume,
+        }
+    }
+}
+
 pub fn read_rowcount(path: &str) -> i64 {
     let mut rdr = csv::Reader::from_path(path).unwrap();
     let mut count = 0;
