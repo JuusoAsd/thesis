@@ -8,7 +8,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use super::file_util::{get_file_date, ASRecord, AggregateRecord, FileHandler};
+use super::file_util::{get_file_date, ASRecord, AggregateRecord, FileHandler, InterimRecord};
 use super::orderbook_util::{Orderbook, OrderbookLevel, OrderbookLevelPartial};
 
 #[derive(Debug, Deserialize)]
@@ -627,5 +627,72 @@ pub fn parse_records_aggregate_ts(
         }
 
         current_timestamp = min(update_record.timestamp, trade_record.timestamp);
+    }
+}
+
+pub fn parse_records_interim_data(
+    start_timestamp: i64,
+    end_timestamp: i64,
+    target_path: &PathBuf,
+    mut update_iter: FileHandler,
+    mut trade_iter: FileHandler,
+    mut orderbook: Orderbook,
+) {
+    let start_time = SystemTime::now();
+    let mut count: i64 = 0;
+    let mut writer = csv::Writer::from_path(target_path).unwrap();
+    let mut previous_timestamp = start_timestamp;
+
+    let (mut update_iter, mut trade_iter, mut update_record, mut trade_record) =
+        progress_iterators(update_iter, trade_iter, start_timestamp);
+
+    let mut current_timestamp = min(update_record.timestamp, trade_record.timestamp);
+    let mut mid_price = orderbook.get_midprice();
+    let mut low_price = dec!(0);
+    let mut high_price = dec!(0);
+    let mut buy_volume = dec!(0);
+    let mut sell_volume = dec!(0);
+
+    // // start looping updates and trades
+    loop {
+        count += 1;
+        if count % 1_000_000 == 0 {
+            println!(
+                "Processed {} updates in {} seconds",
+                count,
+                start_time.elapsed().unwrap().as_secs()
+            );
+        }
+        // we should update the latest record, be it a trade or orderbook update
+        if update_record.timestamp < trade_record.timestamp {
+            // order book update, we just update the internal book
+            orderbook.update_parse_record(&update_record);
+            update_record = match update_iter.next() {
+                Some(r) => update_iter.deserialize_value(&r),
+                None => break,
+            };
+        }
+        if update_record.timestamp >= trade_record.timestamp {
+            // trade update, record the trade and current mid price
+            mid_price = orderbook.get_midprice();
+            let mut recorded_data = InterimRecord::new(
+                trade_record.timestamp,
+                mid_price,
+                trade_record.qty,
+                trade_record.price,
+                Side::Ask,
+            );
+            writer.serialize(recorded_data).unwrap();
+            previous_timestamp = trade_record.timestamp;
+
+            trade_record = match trade_iter.next() {
+                Some(r) => trade_iter.deserialize_value(&r),
+                None => break,
+            };
+        }
+
+        if update_record.timestamp >= end_timestamp {
+            break;
+        }
     }
 }

@@ -1,5 +1,5 @@
-import os
 import numpy as np
+import os
 
 
 class FileManager:
@@ -91,5 +91,8 @@ class ASState:
         self.mid_price = (self.best_bid + self.best_ask) / 2
         self.trade_price = float(input_list[3])
         self.trade_size = float(input_list[4])
-        self.vol = float(input_list[5])
+        self.volatility = float(input_list[5])
         self.intensity = float(input_list[6])
+
+    def get_observation(self):
+        return np.array([self.best_bid, self.best_ask, self.vol, self.intensity])

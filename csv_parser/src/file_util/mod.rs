@@ -136,6 +136,33 @@ impl AggregateRecord {
     }
 }
 
+#[derive(Debug, Serialize)]
+pub struct InterimRecord {
+    timestamp: i64,
+    mid_price: Decimal,
+    size: Decimal,
+    price: Decimal,
+    side: Side,
+}
+
+impl InterimRecord {
+    pub fn new(
+        timestamp: i64,
+        mid_price: Decimal,
+        size: Decimal,
+        price: Decimal,
+        side: Side,
+    ) -> Self {
+        Self {
+            timestamp,
+            mid_price,
+            size,
+            price,
+            side,
+        }
+    }
+}
+
 pub fn read_rowcount(path: &str) -> i64 {
     let mut rdr = csv::Reader::from_path(path).unwrap();
     let mut count = 0;

@@ -47,10 +47,10 @@ class AvellanedaStoikovPolicy(PolicyBase):
 
     def get_action_space(self):
         action_dict = {
-            "bid_size": [0, 1000],
-            "ask_size": [0, 1000],
-            "bid": [0, 1000],
-            "ask": [0, 1000],
+            "bid_size": [0, 1],  # bid size from 0 to max bid
+            "ask_size": [0, 1],
+            "bid": [-1, 1],  # bid price from min to max in ticks from mid price
+            "ask": [-1, 1],
         }
         return spaces.Box(
             low=np.array([action_dict[key][0] for key in action_dict.keys()]),
@@ -117,6 +117,52 @@ class AvellanedaStoikovPolicy(PolicyBase):
                 self.env.current_state.intensity,
             ],
             dtype=np.float64,
+        )
+
+
+def avellaneda_stoikov_policy(
+    mid_price, inventory, vol, intensity, risk_aversion, order_size
+):
+    reservation_price = mid_price - inventory * vol * risk_aversion
+    spread = vol * risk_aversion + 2 / risk_aversion * np.log(
+        1 + risk_aversion / intensity
+    )
+
+    bid_size = order_size
+    ask_size = order_size
+    bid = round(reservation_price - spread / 2, 2)
+    ask = round(reservation_price + spread / 2, 2)
+
+    return np.array([bid_size, ask_size, bid, ask])
+
+
+class ActionNormalizer:
+    def __init__(
+        self, policy_func, max_order_size, tick_size, max_ticks, price_decimals
+    ):
+        self.policy_func = policy_func
+        self.max_order_size = max_order_size
+        self.tick_size = tick_size
+        self.max_ticks = max_ticks
+        self.price_decimals = price_decimals
+
+    def get_action(self, mid_price, **policy_kwargs):
+        action = self.policy_func(mid_price, **policy_kwargs)
+        return self.normalize(action, mid_price)
+
+    def normalize(self, action, mid_price):
+        bid_size = action[0]
+        ask_size = action[1]
+        bid = action[2]
+        ask = action[3]
+
+        bid_size_normalize = bid_size / self.max_order_size
+        ask_size_normalize = ask_size / self.max_order_size
+        bid_normalize = ((bid - mid_price) / self.tick_size) / self.max_ticks
+        ask_normalize = ((ask - mid_price) / self.tick_size) / self.max_ticks
+
+        return np.array(
+            [bid_size_normalize, ask_size_normalize, bid_normalize, ask_normalize]
         )
 
 

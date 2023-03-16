@@ -17,7 +17,6 @@ import csv
 import sys
 
 from environments.util import Trade, FileManager
-from environments.env_configs.spaces import get_observation, apply_action
 
 
 class AgentBaseClass:
@@ -44,19 +43,19 @@ class MMEnv(gym.Env):
     def __init__(
         self,
         state_folder,
+        policy,
         capital=1000,
         step_interval=10_000,
         price_decimals=4,
         tick_size=0.0001,
         inventory_target=0,
-        observation_type=None,
+        output_type=None,
         params={},
         policy_params={},
         logger=False,
         logging=False,
     ):
-        self.params = params
-        self.policy_params = policy_params
+        self.policy = policy(self, **policy_params)
         self.state_folder = state_folder
 
         self.logger = logger
@@ -65,10 +64,10 @@ class MMEnv(gym.Env):
         self.capital = capital
         self.step_interval = step_interval
         self.price_decimals = price_decimals
-        self.observation_type = observation_type
+        self.output_type = output_type
         self.tick_size = tick_size
         self.inventory_target = inventory_target
-        assert observation_type is not None, "observation_type must be specified"
+        assert output_type is not None, "output_type must be specified"
 
         for k, v in params.items():
             setattr(self, k, v)
@@ -76,9 +75,17 @@ class MMEnv(gym.Env):
         # to observe the external environment we need best bid and ask and possible trades (price and size), for internal just inventory
         # Everything else depends on the inputs of the policy we are using
         # observations are read from raw data as is but then normalized to be in the given ranges
+        required_observations = {
+            "best_bid": [0, 1000],
+            "best_ask": [0, 1000],
+            "inventory": [-1, 1],
+        }
 
-        self.observation_space = params["observation_space"].value
-        self.action_space = params["action_space"].value
+        self.observation_space = self.policy.get_observation_space(
+            required_observations
+        )
+        self.action_space = self.policy.get_action_space()
+
         self.reset()
         return None
 
@@ -95,7 +102,7 @@ class MMEnv(gym.Env):
         self.ask = 0
         self.ask_size = 0
 
-        self.state_manager = FileManager(self.state_folder, self.observation_type)
+        self.state_manager = FileManager(self.state_folder, self.output_type)
         """
         Current state constains all the data needed to execute trades
           - timestamp
@@ -107,19 +114,31 @@ class MMEnv(gym.Env):
         """
         self.current_state = self.state_manager.get_next_event()
         self.previous_state = self.current_state
-        return get_observation(self)
+        return self.policy.get_observation()
 
     def step(self, action):
-        apply_action(self, action)
+        """
+        - 1) Receive action in internal format
+        - 2) Execute action
+        - 3) Get the latest state of the environment
+        - 4) Calculate reward on latest state
+        - 5) Convert actions and observations to normalized format
+        - 6) return observation, reward, and stuff
+        """
+        # 2) apply action how policy would apply it
+        self.policy.apply_action(action)
+
         start_value = self.get_total_value()
 
+        # 3)
         previous_state = self.current_state
         self.current_state = self.state_manager.get_next_event()
         if self.current_state is None:
             self.current_state = previous_state
-            return get_observation(self), 0, True, {}
+            observation = self.policy.get_observation()
+            return observation, 0, True, {}
 
-        # between steps, some time passes determined by step_interval
+        # 3) between steps, some time passes determined by step_interval
         while self.current_state.timestamp - self.previous_ts < self.step_interval:
             self.execute_market_orders()
             self.execute_limit_orders()
@@ -127,16 +146,20 @@ class MMEnv(gym.Env):
             self.current_state = self.state_manager.get_next_event()
             if self.current_state is None:
                 self.current_state = previous_state
-                return get_observation(self), 0, True, {}
+                observation = self.policy.get_observation()
+                return observation, 0, True, {}
         self.previous_ts = self.current_state.timestamp
 
+        # 4)
         reward = self.get_total_value() - start_value
 
+        # 5)
+        observation = self.policy.get_observation()
         if abs(self.get_inventory(self.current_state.mid_price)) > 1:
             logging.debug(f"Inventory too high, liquidated")
-            return get_observation(self), -100, True, {}
+            return observation, -100, True, {}
 
-        return get_observation(self), reward, False, {}
+        return observation, reward, False, {}
 
     def execute_market_orders(self):
         """
