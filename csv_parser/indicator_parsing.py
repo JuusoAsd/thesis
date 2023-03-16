@@ -1,12 +1,15 @@
 """
 Parses raw csv data into csv of indicators
 """
+import os
+from dotenv import load_dotenv
 from AS.estimators import (
     IntensityEstimator,
     VolatilityEstimator,
     OSIEstimator,
 )
 
+load_dotenv("parse.env")
 import csv
 import time
 import logging
@@ -16,10 +19,8 @@ def parse_indicators_v1():
     # Start by creating readers for raw data, both order book and trades
     # NOTE: at the moment only trade data + mid price is needed because indicators do not require OB
     # Use rust parser that parses trades + order book into trade + mid price for source data
-    interim_path = "/home/juuso/Documents/gradu/parsed_data/aggregated/interim_data.csv"
-    target_path = (
-        "/home/juuso/Documents/gradu/parsed_data/aggregated/indicator_data.csv"
-    )
+    interim_path = os.getenv("INTERIM_PATH")
+    target_path = os.getenv("INDICATOR_PATH")
     day = 1000 * 60 * 60 * 24
     minute = 1000 * 60
     # set update interval to 0 for most calculations, intensity is 99.5% of time so update it to every 30 minutes
