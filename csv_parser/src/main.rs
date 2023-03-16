@@ -3,11 +3,16 @@ use std::path::PathBuf;
 mod file_util;
 mod orderbook_util;
 mod parse_util;
+use dotenvy;
 use file_util::{get_first_snapshot_file, get_folder_files, get_folder_update_files, FileHandler};
 use parse_util::{
     parse_records_aggregate_ts, parse_records_avellaneda_stoikov, parse_records_interim_data,
     parse_snapshot, parse_updates_v2,
 };
+use std::env;
+// use dotenvy;
+// dotenvy::from_filename("rust.env");
+// from_filename("rust.env").ok();
 
 fn parse_data_v1() {
     // v1 parses data as follows:
@@ -188,16 +193,10 @@ fn parse_data_time_aggregation() {
 }
 
 fn parse_interim_data() {
-    let file_count = 2;
-    // let target_path =
-    //     PathBuf::from(r"C:\Users\Ville\Documents\gradu\parsed_data\AS\data.csv");
-    let target_path =
-        PathBuf::from("/home/juuso/Documents/gradu/parsed_data/aggregated/interim_data.csv");
+    let file_count = 1;
+    let target_path = PathBuf::from(env::var("TARGET_PATH").unwrap());
 
-    // let update_path =
-    // PathBuf::from(r"C:\Users\Ville\Documents\gradu\data\ADAUSDT_T_DEPTH_2021-12-21");
-    let update_path =
-        PathBuf::from("/media/juuso/5655B83E58A8FD4F/orderbook/ADAUSDT_T_DEPTH_202211031113(1)");
+    let update_path = PathBuf::from(env::var("UPDATE_PATH").unwrap());
     let update_headers = StringRecord::from(vec![
         "symbol",
         "timestamp",
@@ -210,8 +209,7 @@ fn parse_interim_data() {
         "pu",
     ]);
 
-    // let trade_path = PathBuf::from(r"C:\Users\Ville\Documents\gradu\data\trades");
-    let trade_path = PathBuf::from("/media/juuso/5655B83E58A8FD4F/trades");
+    let trade_path = PathBuf::from(env::var("TRADE_PATH").unwrap());
     let trade_header = StringRecord::from(vec![
         "trade_id",
         "price",
@@ -248,5 +246,9 @@ fn parse_interim_data() {
 }
 
 fn main() {
+    match dotenvy::from_filename("rust.env") {
+        Ok(_) => println!("Loaded .env file"),
+        Err(e) => println!("Error loading .env file: {}", e),
+    }
     parse_interim_data();
 }
