@@ -13,6 +13,24 @@ def get_space(space_dict):
     )
 
 
+def get_integer_space(space_dict):
+    return spaces.Box(
+        low=np.array([space_dict[key][0] for key in space_dict.keys()]),
+        high=np.array([space_dict[key][1] for key in space_dict.keys()]),
+        shape=(len(space_dict.keys()),),
+        dtype=int,
+    )
+
+
+# def get_discrete_space(space_dict):
+#     return spaces.Discrete(
+#         np.array([space_dict[key][0] for key in space_dict.keys()]),
+#         high=np.array([space_dict[key][1] for key in space_dict.keys()]),
+#         shape=(len(space_dict.keys()),),
+#         dtype=int,
+#     )
+
+
 class ActionSpace(Enum):
     # Enum for different possible action spaces
     NormalizedAction = get_space(
@@ -23,6 +41,25 @@ class ActionSpace(Enum):
             "ask": [-1, 1],
         }
     )
+    # Same as above but instead of using floats uses integers,
+    # size is order size as number of units
+    # price is number of HALF-ticks from mid price (1 = 0.5 ticks)
+    NormalizedIntegerAction = get_integer_space(
+        {
+            "bid_size": [0, 10],
+            "ask_size": [0, 10],
+            "bid": [-20, 20],
+            "ask": [-20, 20],
+        }
+    )
+    # NormalizedDiscreteAction = get_discrete_space(
+    #     {
+    #         "bid_size": [0, 10],
+    #         "ask_size": [0, 10],
+    #         "bid": [-20, 20],
+    #         "ask": [-20, 20],
+    #     }
+    # )
 
 
 class ObservationSpace(Enum):
@@ -45,6 +82,13 @@ class ObservationSpace(Enum):
             "volatility": [0, 100_000],
             "intensity": [0, 100_000],
             "osi": [-100, 100],
+        }
+    )
+    SimpleObservation = get_space(
+        {
+            "inventory": [-1, 1],
+            "volatility": [0, 1],
+            "intensity": [0, 100_000],
         }
     )
 

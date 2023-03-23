@@ -148,16 +148,20 @@ class InventoryIntegralPenalty(BaseRewardClass):
         # spot penalty should also be non-linear
         spot_penalty = np.abs(inventory) ** self.spot_modifier
 
-        # always above 1
-        inventory_penalty = 1 + (accumulation_penalty * spot_penalty)
+        # include extra penalty for above abs(1) inventory
+        is_liquidated = np.abs(inventory) > 1
 
+        # always above 1
+        inventory_penalty = (
+            1 + (accumulation_penalty * spot_penalty) + is_liquidated * 10
+        )
         # negative profit -> inventory multiplies reward
         reward = is_positive * (returns / inventory_penalty) + (1 - is_positive) * (
             returns * inventory_penalty
         )
-        print(f"inventory: {inventory}")
-        print(f"accumulated_inventory: {self.accumulated_inventory}")
+        # print(f"inventory: {inventory}")
+        # print(f"accumulated_inventory: {self.accumulated_inventory}")
 
-        print()
+        # print()
         # time.sleep(0.5)
         return reward

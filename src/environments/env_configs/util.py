@@ -71,22 +71,22 @@ class BCEvalCallback:
         # don't start evals until "wait" freq periods have passed
         if self.count < self.wait * self.freq:
             return False
-        if isinstance(self.trainer.venv, VecNormalize):
-            try:
-                sync_envs_normalization(self.trainer.venv, self.env)
-            except AttributeError as e:
-                raise AssertionError(
-                    "Training and eval env are not wrapped the same way, "
-                    "see https://stable-baselines3.readthedocs.io/en/master/guide/callbacks.html#evalcallback "
-                    "and warning above."
-                ) from e
+        # if isinstance(self.trainer.venv, VecNormalize):
+        #     try:
+        #         sync_envs_normalization(self.trainer.venv, self.env)
+        #     except AttributeError as e:
+        #         raise AssertionError(
+        #             "Training and eval env are not wrapped the same way, "
+        #             "see https://stable-baselines3.readthedocs.io/en/master/guide/callbacks.html#evalcallback "
+        #             "and warning above."
+        #         ) from e
         reward, _ = evaluate_policy(
             self.trainer.policy,  # type: ignore[arg-type]
             self.env,
             n_eval_episodes=self.n_episodes,
             render=False,
         )
-        print(reward)
+        # print(reward)
         if self.best_reward < reward:  # improved
             self.best_reward = reward
             self.wait = self.patience

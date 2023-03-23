@@ -1,6 +1,11 @@
+import os
+import logging
+import pandas as pd
 import numpy as np
 import gym
 from environments.env_configs.rewards import BaseRewardClass
+import environments.env_configs.policies as policies
+from environments.env_configs.spaces import ActionSpace, ObservationSpace
 
 
 class MMVecEnv(gym.Env):
@@ -58,7 +63,9 @@ class MMVecEnv(gym.Env):
         for k, v in column_mapping.items():
             setattr(self, k, data[:, v])
 
+        self.obs_space = params["observation_space"]
         self.observation_space = params["observation_space"].value
+        self.act_space = params["action_space"]
         self.action_space = params["action_space"].value
         self.reset()
         return None
@@ -88,20 +95,19 @@ class MMVecEnv(gym.Env):
         self._execute_limit_orders()
 
         # update timeseries variables amd produce observation
-        obs = self._get_observation()
         value_end = self._get_value()
         self.values.append(value_end)  # VECTORIZE
-        self.inventory.append(obs[:, 1])  # VECTORIZE
 
         reward = self.reward_class.end_step()
 
         # determine if episode is done
-        is_liquidated = np.abs(self.norm_inventory) > 1
         is_over = self.current_step == self.end_steps
 
         # increment step unless episode is done
         self.current_step += 1 - is_over
-        is_dones = (is_liquidated + is_over).T
+        obs = self._get_observation()
+        self.inventory.append(obs[:, 1])  # VECTORIZE
+        is_dones = is_over.T
         info = np.repeat({}, self.n_envs)
 
         for i in range(self.n_envs):
@@ -119,12 +125,14 @@ class MMVecEnv(gym.Env):
     def _execute_market_orders(self):
         execute_buy = self.bids >= self.best_ask[self.current_step]
         self.inventory_qty += self.bid_sizes * execute_buy
+        logging.debug(f"execute market buy {execute_buy}")
 
         self.quote -= self.bids * self.bid_sizes * execute_buy
         self.bids = self.bids * (1 - execute_buy)
         self.bid_sizes = self.bid_sizes * (1 - execute_buy)
 
         execute_sell = self.asks <= self.best_bid[self.current_step]
+        logging.debug(f"execute market sell {execute_sell}")
         self.inventory_qty -= self.ask_sizes * execute_sell
         self.quote += self.asks * self.ask_sizes * execute_sell
         self.asks = self.asks * (1 - execute_sell)
@@ -133,12 +141,14 @@ class MMVecEnv(gym.Env):
 
     def _execute_limit_orders(self):
         execute_buy = self.bids >= self.low_price[self.current_step]
+        logging.debug(f"execute limit buy {execute_buy}")
         self.inventory_qty += self.bid_sizes * execute_buy
         self.quote -= self.bids * self.bid_sizes * execute_buy
         self.bids = self.bids * (1 - execute_buy)
         self.bid_sizes = self.bid_sizes * (1 - execute_buy)
 
         execute_sell = self.asks <= self.high_price[self.current_step]
+        logging.debug(f"execute limit sell {execute_sell}")
         self.inventory_qty -= self.ask_sizes * execute_sell
         self.quote += self.asks * self.ask_sizes * execute_sell
         self.asks = self.asks * (1 - execute_sell)
@@ -147,14 +157,20 @@ class MMVecEnv(gym.Env):
 
     def _get_observation(self):
         # normalize inventory
-        self.norm_inventory = (
+        self.norm_inventory = np.round(
             (
-                self.inventory_qty
-                / (self.inventory_qty + self.quote / self.mid_price[self.current_step])
-                - self.inventory_target
-            )
-            .reshape(-1, 1)
-            .T
+                (
+                    self.inventory_qty
+                    / (
+                        self.inventory_qty
+                        + self.quote / self.mid_price[self.current_step]
+                    )
+                    - self.inventory_target
+                )
+                .reshape(-1, 1)
+                .T
+            ),
+            4,
         )
 
         intensity = (
@@ -181,42 +197,39 @@ class MMVecEnv(gym.Env):
             .reshape(-1, 1)
             .T
         )
-        obs = np.concatenate(
-            [
-                np.full(self.n_envs, self.mid_price[self.current_step])
-                .reshape(-1, 1)
-                .T,  # VECTORIZE
-                self.norm_inventory,
-                intensity,
-                volatility,
-                osi,
-            ]
-        ).T
+        if self.obs_space == ObservationSpace.OSIObservation:
+            obs = np.concatenate(
+                [
+                    np.full(self.n_envs, self.mid_price[self.current_step])
+                    .reshape(-1, 1)
+                    .T,
+                    self.norm_inventory,
+                    intensity,
+                    volatility,
+                    osi,
+                ]
+            ).T
+        elif self.obs_space == ObservationSpace.SimpleObservation:
+            obs = np.concatenate(
+                [
+                    self.norm_inventory,
+                    volatility,
+                    intensity,
+                ]
+            ).T
         return obs  # VECTORIZE
 
     def _apply_action(self, action):
         if action.ndim == 1:
             action = action.reshape(-1, 1).T
-        # action is normalized, should be "denormalized" to actual values
-        # action should be shape n_envs x n_params
 
-        # params: bid_size, ask_size, bid_price, ask_price
-
-        # self.bid_sizes = action[:, 0] * self.max_order_size
-        # self.ask_sizes = action[:, 1] * self.max_order_size
-
-        self.bid_sizes = np.full(self.n_envs, 1)
-        self.ask_sizes = np.full(self.n_envs, 1)
-
-        bids = action[:, 2] * self.max_ticks * self.tick_size
-        asks = action[:, 3] * self.max_ticks * self.tick_size
-
-        self.bids = np.round(
-            self.mid_price[self.current_step] + bids, self.price_decimals
-        )
-        self.asks = np.round(
-            self.mid_price[self.current_step] + asks, self.price_decimals
-        )
+        if self.act_space == ActionSpace.NormalizedAction:
+            formated_action = policies.convert_continuous_action(self, action)
+        elif self.act_space == ActionSpace.NormalizedIntegerAction:
+            formated_action = policies.convert_integer_action(self, action)
+        else:
+            raise NotImplementedError
+        self.bid_sizes, self.ask_sizes, self.bids, self.asks = formated_action
 
     def _get_value(self):
         return self.quote + self.inventory_qty * self.mid_price[self.current_step]
@@ -243,6 +256,15 @@ class MMVecEnv(gym.Env):
                 v = v.tolist()
             str_rep += f"{k}: {v}\n"
         return str_rep
+
+    def save_metrics(self, path):
+        data_dict = {
+            "value": np.array(self.values)[:, 0],
+            "inventory": np.array(self.inventory)[:, 0],
+        }
+        pd.DataFrame(data_dict).to_csv(
+            os.path.join(os.getenv("RESULT_PATH"), f"{path}.csv"), index=False
+        )
 
 
 from stable_baselines3.common.vec_env import VecEnv
@@ -297,3 +319,6 @@ class SBMMVecEnv(VecEnv):
 
     def seed(self, seed=None):
         self.env.seed(seed)
+
+
+from stable_baselines3.common.vec_env import VecNormalize

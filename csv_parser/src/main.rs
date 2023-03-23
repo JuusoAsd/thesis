@@ -131,17 +131,15 @@ fn parse_data_time_aggregation() {
     // produces a csv with data aggregated on timestamp_aggregation interval
     // data contains timestamp,best_bid,best_ask,low_price,high_price,buy_volume,sell_volume for the time interval
     // benchmark speed is 1M per second
-    let file_count = 2;
+    let file_count = 1;
     // let target_path =
     //     PathBuf::from(r"C:\Users\Ville\Documents\gradu\parsed_data\AS\data.csv");
-    let target_path =
-        PathBuf::from("/home/juuso/Documents/gradu/parsed_data/aggregated/base_data.csv");
+    let target_path = PathBuf::from(env::var("TARGET_PATH_BASE").unwrap());
     let timestamp_aggregation = 1000;
 
     // let update_path =
     // PathBuf::from(r"C:\Users\Ville\Documents\gradu\data\ADAUSDT_T_DEPTH_2021-12-21");
-    let update_path =
-        PathBuf::from("/media/juuso/5655B83E58A8FD4F/orderbook/ADAUSDT_T_DEPTH_202211031113(1)");
+    let update_path = PathBuf::from(env::var("UPDATE_PATH").unwrap());
     let update_headers = StringRecord::from(vec![
         "symbol",
         "timestamp",
@@ -155,7 +153,7 @@ fn parse_data_time_aggregation() {
     ]);
 
     // let trade_path = PathBuf::from(r"C:\Users\Ville\Documents\gradu\data\trades");
-    let trade_path = PathBuf::from("/media/juuso/5655B83E58A8FD4F/trades");
+    let trade_path = PathBuf::from(env::var("TRADE_PATH").unwrap());
     let trade_header = StringRecord::from(vec![
         "trade_id",
         "price",
@@ -194,7 +192,7 @@ fn parse_data_time_aggregation() {
 
 fn parse_interim_data() {
     let file_count = 1;
-    let target_path = PathBuf::from(env::var("TARGET_PATH").unwrap());
+    let target_path = PathBuf::from(env::var("TARGET_PATH_INTERIM").unwrap());
 
     let update_path = PathBuf::from(env::var("UPDATE_PATH").unwrap());
     let update_headers = StringRecord::from(vec![
@@ -246,9 +244,10 @@ fn parse_interim_data() {
 }
 
 fn main() {
-    match dotenvy::from_filename("rust.env") {
+    match dotenvy::from_filename("parse.env") {
         Ok(_) => println!("Loaded .env file"),
         Err(e) => println!("Error loading .env file: {}", e),
     }
-    parse_interim_data();
+    // parse_interim_data();
+    parse_data_time_aggregation();
 }

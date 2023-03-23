@@ -65,7 +65,9 @@ def parse_indicators_v1():
                         - intensity_seconds
                         - volatility_seconds
                     )
-                    writer.writerow([timestamp, intensity, volatility, osi])
+                    writer.writerow(
+                        [timestamp, round(intensity), volatility, round(osi, 2)]
+                    )
                     last_update = timestamp
 
                     total_time = time.time() - start_calc
