@@ -57,6 +57,20 @@ impl Orderbook {
         self.update(level);
     }
 
+    pub fn get_midprice(&self) -> Decimal {
+        let bid = self.get_nth_bid(0).unwrap();
+        let ask = self.get_nth_ask(0).unwrap();
+        (bid.price + ask.price) / dec!(2.0)
+    }
+
+    pub fn get_best_bid(&self) -> Option<OrderbookLevel> {
+        self.get_nth_bid(0)
+    }
+
+    pub fn get_best_ask(&self) -> Option<OrderbookLevel> {
+        self.get_nth_ask(0)
+    }
+
     pub fn first_n_bids(&self, n: i64) -> BTreeMap<Decimal, OrderbookLevel> {
         // create an n lenght btreemap of the last n bids
         let mut result = BTreeMap::new();
@@ -108,12 +122,6 @@ impl Orderbook {
         }
         println!("Could not find {} th bid", n);
         None
-    }
-
-    pub fn get_midprice(&self) -> Decimal {
-        let bid = self.get_nth_bid(0).unwrap();
-        let ask = self.get_nth_ask(0).unwrap();
-        (bid.price + ask.price) / dec!(2.0)
     }
 
     pub fn write_snapshot_price_size(

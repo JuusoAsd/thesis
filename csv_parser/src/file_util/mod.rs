@@ -103,6 +103,66 @@ impl ASRecord {
     }
 }
 
+#[derive(Debug, Serialize)]
+pub struct AggregateRecord {
+    timestamp: i64,
+    best_bid: Decimal,
+    best_ask: Decimal,
+    low_price: Decimal,
+    high_price: Decimal,
+    buy_volume: Decimal,
+    sell_volume: Decimal,
+}
+
+impl AggregateRecord {
+    pub fn new(
+        timestamp: i64,
+        best_bid: Decimal,
+        best_ask: Decimal,
+        low_price: Decimal,
+        high_price: Decimal,
+        buy_volume: Decimal,
+        sell_volume: Decimal,
+    ) -> Self {
+        Self {
+            timestamp,
+            best_bid,
+            best_ask,
+            low_price,
+            high_price,
+            buy_volume,
+            sell_volume,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct InterimRecord {
+    timestamp: i64,
+    mid_price: Decimal,
+    size: Decimal,
+    price: Decimal,
+    side: Side,
+}
+
+impl InterimRecord {
+    pub fn new(
+        timestamp: i64,
+        mid_price: Decimal,
+        size: Decimal,
+        price: Decimal,
+        side: Side,
+    ) -> Self {
+        Self {
+            timestamp,
+            mid_price,
+            size,
+            price,
+            side,
+        }
+    }
+}
+
 pub fn read_rowcount(path: &str) -> i64 {
     let mut rdr = csv::Reader::from_path(path).unwrap();
     let mut count = 0;
@@ -167,10 +227,26 @@ pub fn get_folder_files(folder_path: &PathBuf) -> Vec<PathBuf> {
 }
 
 pub fn get_first_snapshot_file(folder_path: &PathBuf) -> Option<PathBuf> {
-    let sub_folders = fs::read_dir(folder_path).unwrap();
-    for folder in sub_folders {
-        let sub_path = fs::read_dir(folder.unwrap().path()).unwrap();
-        for sub_path in sub_path {
+    let folder = match fs::read_dir(folder_path) {
+        Ok(folder) => folder,
+        Err(_) => {
+            panic!("Error reading folder: {}", folder_path.to_str().unwrap());
+        }
+    };
+    for sub_folders in folder {
+        let ok_sub_folder = match sub_folders {
+            Ok(sub_folder) => sub_folder,
+            Err(_) => {
+                panic!("Error reading subfolder");
+            }
+        };
+        let ok_sub_path = match fs::read_dir(ok_sub_folder.path()) {
+            Ok(sub_path) => sub_path,
+            Err(_) => {
+                panic!("Error reading subfolder paths");
+            }
+        };
+        for sub_path in ok_sub_path {
             let file_path = sub_path.as_ref().unwrap().path();
             if sub_path
                 .unwrap()

@@ -16,8 +16,7 @@ from gym.wrappers.normalize import NormalizeObservation
 import csv
 import sys
 
-from environments.util import Trade, FileManager
-from environments.env_configs.spaces import get_observation, apply_action
+from src.environments.util import Trade, FileManager
 
 
 class AgentBaseClass:
@@ -44,43 +43,78 @@ class MMEnv(gym.Env):
     def __init__(
         self,
         state_folder,
-        capital=1000,
-        step_interval=10_000,
-        price_decimals=4,
-        tick_size=0.0001,
-        inventory_target=0,
-        observation_type=None,
-        params={},
+        logger,
+        policy,
+        params={
+            "capital": 1000,  # initial capital
+            "step_interval": 10_000,  # minimum time between agent actions (ms)
+            "price_decimals": 4,  # how many decimals to round prices to
+        },
         policy_params={},
-        logger=False,
         logging=False,
     ):
-        self.params = params
-        self.policy_params = policy_params
+        self.policy = policy(self, policy_params)
         self.state_folder = state_folder
 
         self.logger = logger
         self.logging = logging
 
-        self.capital = capital
-        self.step_interval = step_interval
-        self.price_decimals = price_decimals
-        self.observation_type = observation_type
-        self.tick_size = tick_size
-        self.inventory_target = inventory_target
-        assert observation_type is not None, "observation_type must be specified"
+        self.capital = None
+        self.step_interval = None
+        self.price_decimals = None
+        self.output_type = None
 
         for k, v in params.items():
             setattr(self, k, v)
 
+        required_attributes = [
+            "capital",
+            "step_interval",
+            "price_decimals",
+            "output_type",
+        ]
+        for attr in required_attributes:
+            if getattr(self, attr) is None:
+                raise AttributeError(
+                    f"Attribute {attr} not found in params. Required attributes: {required_attributes}"
+                )
+
         # to observe the external environment we need best bid and ask and possible trades (price and size), for internal just inventory
         # Everything else depends on the inputs of the policy we are using
         # observations are read from raw data as is but then normalized to be in the given ranges
+        required_observations = {
+            "best_bid": [
+                0,
+                1,
+            ],  # tick distance from midprice [0.5, inf] -> normalized to [0, 1]
+            "best_ask": [
+                0,
+                1,
+            ],  # tick distance from midprice [0.5, inf] -> normalized to [0, 1]
+            "trade_price": [
+                -1,
+                1,
+            ],  # tick distance from midprice [-inf, inf] (sort of) -> normalized to [-1, 1]
+            "trade_size": [0, 1],  # normalized trade size [0, 1]
+            "inventory": [
+                -1,
+                1,
+            ],  # normalized inventory: base value / (base value + quote value) - inventory target
+        }
 
-        self.observation_space = params["observation_space"].value
-        self.action_space = params["action_space"].value
+        self.observation_space = spaces.Box(
+            low=np.array(
+                [required_observations[key][0] for key in required_observations.keys()]
+            ),
+            high=np.array(
+                [required_observations[key][1] for key in required_observations.keys()]
+            ),
+            shape=(len(required_observations.keys()),),
+            dtype=np.float32,
+        )
+        self.action_space = self.policy.get_action_space()
+
         self.reset()
-        return None
 
     def reset(self):
         self.counter = 0
@@ -95,7 +129,7 @@ class MMEnv(gym.Env):
         self.ask = 0
         self.ask_size = 0
 
-        self.state_manager = FileManager(self.state_folder, self.observation_type)
+        self.state_manager = FileManager(self.state_folder, self.output_type)
         """
         Current state constains all the data needed to execute trades
           - timestamp
@@ -104,39 +138,47 @@ class MMEnv(gym.Env):
           - trade price (0 if no trade)
           - trade size (0 if no trade)
         It also contains agent-specific data
-        """
+          """
         self.current_state = self.state_manager.get_next_event()
         self.previous_state = self.current_state
-        return get_observation(self)
+        return self.previous_state
 
     def step(self, action):
-        apply_action(self, action)
-        start_value = self.get_total_value()
+        """
+        Agent has set its desired b/a in the previous state
+        Multiple events happen in environment based on latest data in following order:
+            - market orders by agent are executed
+            - best bid and ask, midprice are updated
+            - possible trades are executed againts agent's limit orders
+        Agent sets new desired b/a based on the latest state
 
-        previous_state = self.current_state
+        Step has some configuration associated with it:
+        - aggregation_window (10): how many milliseconds minimum between agent actions
+        """
+        self.counter += 1
+        if self.counter % 1_000_000 == 0:
+            print(
+                f"Steps: {self.counter}, trades: {self.trade_counter} errors: {self.error_counter}"
+            )
+        if self.previous_ts == 0:
+            self.previous_ts = self.current_state.timestamp
+
+        # Only update orders when stap_interval has passed since previous update, still execute trades if happen
+        # also update indicators with small_step
         self.current_state = self.state_manager.get_next_event()
         if self.current_state is None:
-            self.current_state = previous_state
-            return get_observation(self), 0, True, {}
-
-        # between steps, some time passes determined by step_interval
-        while self.current_state.timestamp - self.previous_ts < self.step_interval:
+            return True
+        while self.current_state[0] - self.previous_ts < self.step_interval:
+            self.agent.small_step()
             self.execute_market_orders()
             self.execute_limit_orders()
             self.previous_state = self.current_state
             self.current_state = self.state_manager.get_next_event()
             if self.current_state is None:
-                self.current_state = previous_state
-                return get_observation(self), 0, True, {}
+                return True
         self.previous_ts = self.current_state.timestamp
 
-        reward = self.get_total_value() - start_value
-
-        if abs(self.get_inventory(self.current_state.mid_price)) > 1:
-            logging.debug(f"Inventory too high, liquidated")
-            return get_observation(self), -100, True, {}
-
-        return get_observation(self), reward, False, {}
+        self.agent.step()
 
     def execute_market_orders(self):
         """
@@ -161,8 +203,8 @@ class MMEnv(gym.Env):
                 )
 
     def execute_limit_orders(self):
-        if self.current_state.trade_size != 0:
-            if self.current_state.trade_price <= self.bid and self.bid_size > 0:
+        if self.current_state.trade is not None:
+            if self.current_state.trade.price <= self.bid and self.bid_size > 0:
                 bid_price = self.bid
                 bid_size = self.bid_size
                 self._buy(bid_price, bid_size)
@@ -171,7 +213,7 @@ class MMEnv(gym.Env):
                         f"action,{self.current_state.timestamp},limit_buy,{bid_price},{bid_size},{self.current_state.mid_price},{self.base_asset},{self.quote_asset}"
                     )
 
-            elif self.current_state.trade_price >= self.ask and self.ask_size > 0:
+            elif self.current_state.trade.price >= self.ask and self.ask_size > 0:
                 ask_price = self.ask
                 ask_size = self.ask_size
                 self._sell(ask_price, ask_size)
@@ -180,12 +222,12 @@ class MMEnv(gym.Env):
                         f"action,{self.current_state.timestamp},limit_sell,{ask_price},{ask_size},{self.current_state.mid_price},{self.base_asset},{self.quote_asset}"
                     )
 
-    def get_total_value(self):
-        value = self.quote_asset + self.base_asset * self.current_state.mid_price
+    def get_total_value(self, mid_price):
+        value = self.quote_asset + self.base_asset * mid_price
         if self.quote_asset < 0 or self.base_asset < 0:
-            return value
+            return value, True
         else:
-            return value
+            return value, False
 
     def get_current_value(self):
         return (
@@ -205,7 +247,7 @@ class MMEnv(gym.Env):
     def _sell(self, price, amount):
         self.quote_asset += price * amount
         self.base_asset -= amount
-        self.ask = 1_000_000_000
+        self.ask = np.inf
         self.ask_size = 0
         self.trade_counter += 1
 
@@ -213,7 +255,7 @@ class MMEnv(gym.Env):
         return [
             self.quote_asset,
             self.base_asset,
-            self.current_state.mid_price,
+            self.mid_price,
             self.bid,
             self.bid_size,
             self.ask,
@@ -227,9 +269,3 @@ class MMEnv(gym.Env):
     def round_prices(self):
         self.bid = round(self.bid, self.price_decimals)
         self.ask = round(self.ask, self.price_decimals)
-
-    def get_inventory(self, mid_price):
-        return (
-            self.base_asset / (self.base_asset + self.quote_asset / mid_price)
-            - self.inventory_target
-        )

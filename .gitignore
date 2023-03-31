@@ -351,3 +351,5 @@ cython_debug/
 *.xml
 .DS_Store
 .DS_Store
+raw_data/
+models/
