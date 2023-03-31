@@ -258,9 +258,13 @@ class SimplePolicyVec:
         self.env = env
 
     def get_action(self, observation):
+        try:
+            observation = self.env.unnormalize_obs(observation)
+
+        except AttributeError:
+            pass
         if observation.ndim == 1:
             observation = observation.reshape(1, -1)
-
         # numbers can be very large, need to normalize to match action space
         # Can't be a constant function tho
         # inventory: [-1, 1]
@@ -274,11 +278,10 @@ class SimplePolicyVec:
 
         # normalize < 1
         intensity = observation[:, 2] / 100_000
-
-        a = np.abs(intensity)
-        b = np.abs(intensity) / 2
-        c = vol / 2
-        d = vol**2
+        a = vol / 2
+        b = vol**2
+        c = np.abs(intensity)
+        d = np.abs(intensity) / 2
 
         return np.array([a, b, c, d]).T
 
@@ -316,3 +319,76 @@ def convert_integer_action(env, action):
         env.price_decimals,
     )
     return bid_sizes, ask_sizes, bids, asks
+
+
+class RoundingPolicyVec:
+    """
+    returns:
+        vol rounded on 3 decimals * 100
+        vol rounded on 3 decimals * 200
+        vol rounded on 3 decimals * 300
+        vol rounded on 3 decimals * 400
+    """
+
+    def __init__(self, env, **kwargs) -> None:
+        self.env = env
+
+    def get_action(self, observation):
+        try:
+            observation = self.env.unnormalize_obs(observation)
+
+        except AttributeError:
+            pass
+        if observation.ndim == 1:
+            observation = observation.reshape(1, -1)
+        # numbers can be very large, need to normalize to match action space
+        # Can't be a constant function tho
+        # inventory: [-1, 1]
+        # volatility: [0, 1]
+        # intensity: [0, 100_000]
+        # want to fit actions on [0, 1]
+
+        # do not use inventory, might be that BC won't see different inventory states?
+        # inventory = observation[:, 0]
+        vol = np.round(observation[:, 1], 3)
+
+        a = vol * 100
+        b = vol * 200
+        c = vol * 300
+        d = vol * 400
+
+        return np.array([a, b, c, d]).T
+
+    def get_action_func(self):
+        return self.get_action
+
+
+class NThDigitPolicyVec:
+    """
+    returns:
+        sevent digit of vol / 10
+    """
+
+    def __init__(self, env, **kwargs) -> None:
+        self.env = env
+
+    def get_action(self, observation):
+        try:
+            observation = self.env.unnormalize_obs(observation)
+
+        except AttributeError:
+            pass
+        if observation.ndim == 1:
+            observation = observation.reshape(1, -1)
+
+        vol = observation[:, 1]
+        vol = np.array([int(x[7]) for x in vol.astype(str)]) / 10
+        a = vol
+        b = vol
+        c = vol
+        d = vol
+
+        return np.array([a, b, c, d]).T
+
+    def get_action_func(self):
+        return self.get_action
