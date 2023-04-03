@@ -318,7 +318,7 @@ def compare_cloned(env, model, expert_policy, action_count=100, normalize=True):
     else:
         for i in range(10):
             obs = env.observation_space.sample().reshape(1, -1)
-            action_model, _states = model.predict(obs, deterministic=False)
+            action_model, _states = model.predict(obs, deterministic=True)
             expert_action = expert_func(obs)
             print(f"Observation:    {obs}")
             print(f"Action:         {action_model}")
@@ -362,12 +362,12 @@ def model_cloning():
     # parameters are set at the beginning of the function
     clone = True
     model_name = "clone_bc"
-    n_env = 5
+    n_env = 1
     normalize = False
     obs_space = ObservationSpace.SimpleObservation
     act_space = ActionSpace.NormalizedAction
     cloning_model = Cloning.BC
-    cloning_duration = CloneDuration.VeryLong
+    cloning_duration = CloneDuration.Short
     expert_policy = NThDigitPolicyVec
 
     env = MMVecEnv(
