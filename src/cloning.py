@@ -223,10 +223,10 @@ def clone_bc(venv, expert_trainer, student_model, duration, random=True):
     #         index=False,
     #     )
     # )
-    # # start = True
-    # # for i in transitions.obs:
+    # start = True
+    # for i in transitions.obs:
 
-    # #     print(i)
+    #     print(i)
     # exit()
 
     # print(f"norm obs: {obs_0}")
@@ -266,12 +266,14 @@ def clone_bc(venv, expert_trainer, student_model, duration, random=True):
     return "clone_bc"
 
 
-def compare_cloned(env, model, expert_policy, action_count=100, normalize=True):
+def compare_cloned(
+    env, model, expert_policy, expert_params, action_count=100, normalize=True
+):
     env.n_env = 1
     if type(model) == str:
         model = load_trained_model(model, env, normalize=normalize)
     # first run 10 random observations and compare them to expert
-    expert = expert_policy(model.env)
+    expert = expert_policy(**expert_params)
     expert_func = expert.get_action_func()
     if normalize:
         for i in range(10):
@@ -302,18 +304,24 @@ def compare_cloned(env, model, expert_policy, action_count=100, normalize=True):
         previous_action = None
         obs = env.reset()
         action_count = 10
+        every_nth = 10_000
         while True:
-            # this should already be normalized
-            print(f"step obs: {obs}")
-            n += 1
-            action_model, _states = model.predict(obs, deterministic=True)
-            action_expert = expert_func(obs)
+            try:
+                # this should already be normalized
+                n += 1
+                action_model, _states = model.predict(obs, deterministic=True)
+                action_expert = expert_func(obs)
 
-            print(f"action model: {action_model}")
-            print(f"action expert: {action_expert} \n")
-            if n >= action_count:
+                if n % every_nth == 0:
+                    print(f"step obs: {obs}")
+                    print(f"action model: {action_model}")
+                    print(f"action expert: {action_expert} \n")
+                    if n >= action_count:
+                        break
+                obs, _, _, _ = env.step(action_expert)
+
+            except:
                 break
-            obs, _, _, _ = env.step(action_model)
         print(f"distinct action share: {disctint_actions/n*100}%")
     else:
         for i in range(10):
@@ -342,25 +350,36 @@ def compare_cloned(env, model, expert_policy, action_count=100, normalize=True):
         previous_action = None
         obs = env.reset()
         action_count = 10
-        while True:
-            # this should already be normalized
-            print(f"step obs: {obs}")
-            n += 1
-            action_model, _states = model.predict(obs, deterministic=True)
-            action_expert = expert_func(obs)
+        acts = 0
+        every_nth = 10_000
 
-            print(f"action model: {action_model}")
-            print(f"action expert: {action_expert} \n")
-            if n >= action_count:
+        while True:
+            try:
+                # this should already be normalized
+                n += 1
+                action_model, _states = model.predict(obs, deterministic=True)
+                action_expert = expert_func(obs)
+
+                if n % every_nth == 0:
+                    print(f"step obs: {obs}")
+                    print(f"action model: {action_model}")
+                    print(f"action expert: {action_expert} \n")
+                    acts += 1
+                    if acts >= action_count:
+                        break
+                obs, _, _, _ = env.step(action_expert)
+
+            except Exception as e:
+                print(e)
                 break
-            obs, _, _, _ = env.step(action_model)
+        print(n)
         print(f"distinct action share: {disctint_actions/n*100}%")
 
 
 def model_cloning():
     # setup model for cloning here
     # parameters are set at the beginning of the function
-    clone = True
+    clone = False
     model_name = "clone_bc"
     n_env = 1
     normalize = False
@@ -368,7 +387,19 @@ def model_cloning():
     act_space = ActionSpace.NormalizedAction
     cloning_model = Cloning.BC
     cloning_duration = CloneDuration.Short
-    expert_policy = NThDigitPolicyVec
+    expert_policy = ASPolicyVec
+    expert_params = {
+        "max_order_size": 5,
+        "tick_size": 0.0001,
+        "max_ticks": 10,
+        "price_decimals": 4,
+        "inventory_target": 0,
+        "risk_aversion": 0.2,
+        "order_size": 1,
+        "n_env": 1,
+        "obs_type": ObservationSpace.SimpleObservation,
+        "act_type": ActionSpace.NormalizedAction,
+    }
 
     env = MMVecEnv(
         data.to_numpy(),
@@ -385,59 +416,18 @@ def model_cloning():
     if normalize:
         venv = VecNormalize(venv, norm_obs=True, norm_reward=False, clip_obs=100_000)
     student_model = PPO("MlpPolicy", venv, verbose=1)
-    expert = expert_policy(venv)
-
+    expert = expert_policy(**expert_params)
     if clone:
         if cloning_model == Cloning.BC:
             model_name = clone_bc(venv, expert, student_model, cloning_duration)
-    compare_cloned(venv, model_name, expert_policy, action_count=3, normalize=normalize)
-
-
-def test_normalized_env():
-    model_name = "clone_bc"
-    n_env = 1
-    obs_space = ObservationSpace.SimpleObservation
-    act_space = ActionSpace.NormalizedAction
-    env = MMVecEnv(
-        data.to_numpy(),
-        n_envs=n_env,
-        params={
-            "observation_space": obs_space,
-            "action_space": act_space,
-        },
-        column_mapping=column_mapping,
-        reward_class=InventoryIntegralPenalty,  # reward should not matter?
+    compare_cloned(
+        venv,
+        model_name,
+        expert_policy,
+        expert_params,
+        action_count=3,
+        normalize=normalize,
     )
-
-    cloning_model = Cloning.BC
-    cloning_duration = CloneDuration.Long
-    venv = SBMMVecEnv(env)
-    venv_wrapped = VecNormalize(
-        venv, norm_obs=True, norm_reward=False, clip_obs=100_000
-    )
-    student_model = PPO("MlpPolicy", venv_wrapped, verbose=1)
-    expert = SimplePolicyVec(venv_wrapped)
-    action_func = expert.get_action_func()
-
-    intensity = 50_000
-    vol = 0.5
-    # should return:
-    # abs(intensity / 100k)
-    # abs(intensity / 200k)
-    # vol / 2
-    # vol ** 2
-
-    # however, as normalized values are clipped between min and max [-10, 10], it is not so
-    # if change clipping to 100k, works as expected
-
-    obs_unnorm = np.array([0, vol, intensity])
-    obs_norm = venv_wrapped.normalize_obs(obs_unnorm)
-    action_unnorm = action_func(obs_norm)
-    act = action_unnorm
-    print(
-        f"expected: {abs(intensity / 100_000)}, {abs(intensity / 200_000)}, {vol / 2}, {vol ** 2}"
-    )
-    print(f"actual: {act}")
 
 
 if __name__ == "__main__":

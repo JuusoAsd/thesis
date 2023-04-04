@@ -381,13 +381,13 @@ class NThDigitPolicyVec:
         if observation.ndim == 1:
             observation = observation.reshape(1, -1)
 
-        vol = observation[:, 1]
-        vol = np.array([int(x[7]) for x in vol.astype(str)]) / 10
+        vol = observation[:, 1] * 1e12
+        vol = np.array([int(x[6]) for x in vol.astype(str)]) / 10
+
         a = vol
         b = vol
         c = vol
         d = vol
-
         return np.array([a, b, c, d]).T
 
     def get_action_func(self):
