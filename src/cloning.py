@@ -187,7 +187,6 @@ def clone_bc(venv, expert_trainer, student_model, duration, random=True):
         rng=rng,
         unwrap=False,
     )
-
     transitions = rollout.flatten_trajectories(rollouts)
 
     # TESTING
@@ -199,35 +198,34 @@ def clone_bc(venv, expert_trainer, student_model, duration, random=True):
 
     # print(np.min(transitions.acts, axis=0))
     # print(np.max(transitions.acts, axis=0), "\n")
-    # n = 0
-    # all_val = []
-    # while True:
-    #     try:
-    #         obs = transitions.obs[n]
-    #         # obs_unnorm = venv.unnormalize_obs(obs)
-    #         act = transitions.acts[n]
+    n = 0
+    all_val = []
+    while True:
+        try:
+            obs = transitions.obs[n]
+            # obs_unnorm = venv.unnormalize_obs(obs)
+            act = transitions.acts[n]
 
-    #         print(f"obs:    {np.round(transitions.obs[n],4).tolist()}")
-    #         print(f"acts:   {np.round(transitions.acts[n],4).tolist()}\n")
+            # print(f"obs:    {np.round(transitions.obs[n],4).tolist()}")
+            # print(f"acts:   {np.round(transitions.acts[n],4).tolist()}\n")
 
-    #         # current_val = obs.tolist() + obs_unnorm.tolist() + act.tolist()
-    #         current_val = obs.tolist() + act.tolist()
-    #         all_val.append(current_val)
+            # current_val = obs.tolist() + obs_unnorm.tolist() + act.tolist()
+            current_val = obs.tolist() + act.tolist()
+            all_val.append(current_val)
 
-    #         n += 1
-    #     except IndexError:
-    #         break
-    # print(
-    #     pd.DataFrame(all_val).to_csv(
-    #         "/Users/juusoahlroos/Documents/own/gradu/src/data_management/clone_data.csv",
-    #         index=False,
-    #     )
-    # )
-    # start = True
+            n += 1
+        except:
+            break
+
+    pd.DataFrame(all_val).to_csv(
+        "/Users/juusoahlroos/Documents/own/gradu/src/data_management/clone_data.csv",
+        index=False,
+    )
+
+    start = True
     # for i in transitions.obs:
-
-    #     print(i)
-    # exit()
+    #     # print(i)
+    # exit("exit after clone obs")
 
     # print(f"norm obs: {obs_0}")
     # print(f"unnorm obs: {unnorm}")
@@ -267,17 +265,17 @@ def clone_bc(venv, expert_trainer, student_model, duration, random=True):
 
 
 def compare_cloned(
-    env, model, expert_policy, expert_params, action_count=100, normalize=True
+    venv, model, expert_policy, expert_params, action_count=100, normalize=True
 ):
-    env.n_env = 1
+    venv.n_env = 1
     if type(model) == str:
-        model = load_trained_model(model, env, normalize=normalize)
+        model = load_trained_model(model, venv, normalize=normalize)
     # first run 10 random observations and compare them to expert
-    expert = expert_policy(**expert_params)
+    expert = expert_policy(env=venv.env, **expert_params)
     expert_func = expert.get_action_func()
     if normalize:
         for i in range(10):
-            obs = env.observation_space.sample().reshape(1, -1)
+            obs = venv.observation_space.sample().reshape(1, -1)
             norm_obs = model.env.normalize_obs(obs)
             action_model, _states = model.predict(obs, deterministic=True)
             expert_action = expert_func(norm_obs)
@@ -287,7 +285,7 @@ def compare_cloned(
             print(f"Expert action:  {expert_action}\n")
 
         # then run 10 predictions against the expert and see if answer is always the same
-        obs = env.observation_space.sample().reshape(1, -1)
+        obs = venv.observation_space.sample().reshape(1, -1)
         prev_act = None
         act_count = 0
         for i in range(10):
@@ -302,7 +300,7 @@ def compare_cloned(
         wrong_actions = 0
         disctint_actions = 0
         previous_action = None
-        obs = env.reset()
+        obs = venv.reset()
         action_count = 10
         every_nth = 10_000
         while True:
@@ -318,14 +316,14 @@ def compare_cloned(
                     print(f"action expert: {action_expert} \n")
                     if n >= action_count:
                         break
-                obs, _, _, _ = env.step(action_expert)
+                obs, _, _, _ = venv.step(action_expert)
 
             except:
                 break
         print(f"distinct action share: {disctint_actions/n*100}%")
     else:
         for i in range(10):
-            obs = env.observation_space.sample().reshape(1, -1)
+            obs = venv.observation_space.sample().reshape(1, -1)
             action_model, _states = model.predict(obs, deterministic=True)
             expert_action = expert_func(obs)
             print(f"Observation:    {obs}")
@@ -333,7 +331,7 @@ def compare_cloned(
             print(f"Expert action:  {expert_action}\n")
 
         # then run 10 predictions against the expert and see if answer is always the same
-        obs = env.observation_space.sample().reshape(1, -1)
+        obs = venv.observation_space.sample().reshape(1, -1)
         prev_act = None
         act_count = 0
         for i in range(10):
@@ -348,18 +346,20 @@ def compare_cloned(
         wrong_actions = 0
         disctint_actions = 0
         previous_action = None
-        obs = env.reset()
+        obs = venv.reset()
         action_count = 10
         acts = 0
         every_nth = 10_000
 
+        print("Actions from stepping")
         while True:
             try:
                 # this should already be normalized
                 n += 1
                 action_model, _states = model.predict(obs, deterministic=True)
                 action_expert = expert_func(obs)
-
+                # print(action_model)
+                # print(action_expert, "\n")
                 if n % every_nth == 0:
                     print(f"step obs: {obs}")
                     print(f"action model: {action_model}")
@@ -367,7 +367,9 @@ def compare_cloned(
                     acts += 1
                     if acts >= action_count:
                         break
-                obs, _, _, _ = env.step(action_expert)
+                obs, _, dones, _ = venv.step(action_expert)
+                if np.all(dones):
+                    break
 
             except Exception as e:
                 print(e)
@@ -386,7 +388,7 @@ def model_cloning():
     obs_space = ObservationSpace.SimpleObservation
     act_space = ActionSpace.NormalizedAction
     cloning_model = Cloning.BC
-    cloning_duration = CloneDuration.Short
+    cloning_duration = CloneDuration.Long
     expert_policy = ASPolicyVec
     expert_params = {
         "max_order_size": 5,
@@ -396,7 +398,6 @@ def model_cloning():
         "inventory_target": 0,
         "risk_aversion": 0.2,
         "order_size": 1,
-        "n_env": 1,
         "obs_type": ObservationSpace.SimpleObservation,
         "act_type": ActionSpace.NormalizedAction,
     }
@@ -416,7 +417,7 @@ def model_cloning():
     if normalize:
         venv = VecNormalize(venv, norm_obs=True, norm_reward=False, clip_obs=100_000)
     student_model = PPO("MlpPolicy", venv, verbose=1)
-    expert = expert_policy(**expert_params)
+    expert = expert_policy(env=env, **expert_params)
     if clone:
         if cloning_model == Cloning.BC:
             model_name = clone_bc(venv, expert, student_model, cloning_duration)

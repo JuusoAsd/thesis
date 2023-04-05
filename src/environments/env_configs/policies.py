@@ -107,6 +107,7 @@ class AvellanedaStoikovPolicy(PolicyBase):
 class ASPolicyVec:
     def __init__(
         self,
+        env,
         max_order_size,
         tick_size,
         max_ticks,
@@ -114,18 +115,17 @@ class ASPolicyVec:
         inventory_target,
         risk_aversion,
         order_size,
-        n_env=1,
         obs_type=ObservationSpace.OSIObservation,
         act_type=ActionSpace.NormalizedAction,
     ):
+        self.env = env
         self.max_order_size = max_order_size
         self.tick_size = tick_size
         self.max_ticks = max_ticks
         self.price_decimals = price_decimals
         self.inventory_target = inventory_target
         self.risk_aversion = risk_aversion
-        self.order_size = np.full(n_env, order_size)
-        self.n_env = n_env
+        self.order_size = np.full(self.env.n_envs, order_size)
         self.obs_type = obs_type
         self.act_type = act_type
 
@@ -197,16 +197,20 @@ class ASPolicyVec:
         inventory_adjustment = -inventory * vol * self.risk_aversion
         bid_size = self.order_size
         ask_size = self.order_size
-
-        bid_size_normalize = bid_size / self.max_order_size
-        ask_size_normalize = ask_size / self.max_order_size
+        bid_size_normalize = np.full(self.env.n_envs, bid_size / self.max_order_size)
+        ask_size_normalize = np.full(self.env.n_envs, ask_size / self.max_order_size)
 
         bid = np.round(inventory_adjustment - spread / 2, self.price_decimals)
         ask = np.round(inventory_adjustment + spread / 2, self.price_decimals)
 
         bid_normalize = (bid / self.tick_size) / self.max_ticks
         ask_normalize = (ask / self.tick_size) / self.max_ticks
-
+        # print(
+        #     np.array(
+        #         [bid_size_normalize, ask_size_normalize, bid_normalize, ask_normalize]
+        #     ).T
+        # )
+        # exit()
         return np.array(
             [bid_size_normalize, ask_size_normalize, bid_normalize, ask_normalize]
         ).T
@@ -291,15 +295,18 @@ class SimplePolicyVec:
 
 def convert_continuous_action(env, action):
     # this is not fully continuous but uses float and looks like one
-
+    # print(action)
     bid_sizes = np.full(env.n_envs, 1)
     ask_sizes = np.full(env.n_envs, 1)
-
     bids = action[:, 2] * env.max_ticks * env.tick_size
     asks = action[:, 3] * env.max_ticks * env.tick_size
+    # print(f"action: {action[:,2]}")
+    # print(f"mid price: {env.mid_price[env.current_step]}")
+    # print(f"bids: {bids}")
+    # print(f"sum bids: {env.mid_price[env.current_step] + bids}")
+    # print(f"bids type: {type(bids)}, {type(bids[0])}")
     bids_round = np.round(env.mid_price[env.current_step] + bids, env.price_decimals)
     asks_round = np.round(env.mid_price[env.current_step] + asks, env.price_decimals)
-
     return bid_sizes, ask_sizes, bids_round, asks_round
 
 
