@@ -25,7 +25,6 @@ base = pd.read_csv(os.getenv("BASE_PATH"))
 indicators = pd.read_csv(os.getenv("INDICATOR_PATH"))
 data = pd.merge(base, indicators, on="timestamp", how="left").ffill().dropna()
 data["mid_price"] = np.round((data.best_bid + data.best_ask) / 2, 5)
-print(data)
 column_mapping = {col: n for (n, col) in enumerate(data.columns)}
 
 import os
@@ -39,10 +38,6 @@ from stable_baselines3.common.vec_env import VecNormalize
 from environments.env_configs.spaces import ActionSpace, ObservationSpace
 from environments.env_configs.policies import (
     ASPolicyVec,
-    AlwaysSamePolicyVec,
-    SimplePolicyVec,
-    RoundingPolicyVec,
-    NThDigitPolicyVec,
 )
 from environments.mm_env_vec import MMVecEnv, SBMMVecEnv
 from environments.env_configs.util import ExponentialBetaSchedule, BCEvalCallback

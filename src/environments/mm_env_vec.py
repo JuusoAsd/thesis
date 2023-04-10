@@ -5,7 +5,12 @@ import numpy as np
 import gym
 from environments.env_configs.rewards import BaseRewardClass
 import environments.env_configs.policies as policies
-from environments.env_configs.spaces import ActionSpace, ObservationSpace
+from environments.env_configs.spaces import (
+    ActionSpace,
+    ObservationSpace,
+    LinearObservation,
+)
+import random
 
 
 class MMVecEnv(gym.Env):
@@ -22,8 +27,8 @@ class MMVecEnv(gym.Env):
         column_mapping={},
         params={},
         max_order_size=10,
-        max_ticks=10,
         data_portion=0.9,
+        max_diff=0.001,
     ):
         self.n_envs = n_envs
 
@@ -40,11 +45,10 @@ class MMVecEnv(gym.Env):
             end = start + data_portion
             start_val = start * self.data_points
             end_val = end * self.data_points
-
         self.start_steps = start_val.astype(int)
         self.end_steps = end_val.astype(int)
 
-        self.max_ticks = max_ticks
+        self.max_diff = max_diff
         self.capital = capital
         self.price_decimals = price_decimals
         self.tick_size = tick_size
@@ -64,7 +68,10 @@ class MMVecEnv(gym.Env):
             setattr(self, k, data[:, v])
 
         self.obs_space = params["observation_space"]
-        self.observation_space = params["observation_space"].value
+        if type(self.obs_space) == ObservationSpace:
+            self.observation_space = params["observation_space"].value
+        elif type(self.obs_space) == LinearObservation:
+            self.observation_space = self.obs_space.obs_space
         self.act_space = params["action_space"]
         self.action_space = params["action_space"].value
         self.reset()
@@ -78,7 +85,7 @@ class MMVecEnv(gym.Env):
         self.bid_sizes = np.zeros(self.n_envs)
         self.asks = np.zeros(self.n_envs)
         self.ask_sizes = np.zeros(self.n_envs)
-        self.current_step = self.start_steps
+        self.current_step = self.start_steps.copy()
         self.values = []
         self.inventory = []
         self.trade_market = np.zeros(self.n_envs)
@@ -217,18 +224,45 @@ class MMVecEnv(gym.Env):
                     intensity,
                 ]
             ).T
+        elif self.obs_space == ObservationSpace.DummyObservation:
+            obs = np.array([random.uniform(-1, 1), random.uniform(-1, 1)])
+
+        elif type(self.obs_space) == LinearObservation:
+            obs_dict = {
+                "inventory": self.norm_inventory,
+                "volatility": volatility,
+                "intensity": intensity,
+            }
+            normalized_obs = self.obs_space.convert_to_normalized(obs_dict)
+            obs_list = []
+            for i in ["inventory", "volatility", "intensity"]:
+                obs_list.append(normalized_obs[i])
+            obs = np.concatenate(obs_list).T
+
+        else:
+            raise NotImplementedError(f"{self.obs_space} not implemented")
         return obs  # VECTORIZE
 
     def _apply_action(self, action):
+        """
+        Depending on the action space, convert the respective action into matching bid/ask sizes and prices
+        """
         if action.ndim == 1:
             action = action.reshape(-1, 1).T
 
-        if self.act_space == ActionSpace.NormalizedAction:
-            formated_action = policies.convert_continuous_action(self, action)
-        elif self.act_space == ActionSpace.NormalizedIntegerAction:
-            formated_action = policies.convert_integer_action(self, action)
-        else:
-            raise NotImplementedError
+        convert_action = {
+            ActionSpace.NormalizedAction: policies.convert_continuous_action,
+            ActionSpace.NormalizedIntegerAction: policies.convert_integer_action,
+            ActionSpace.NoSizeAction: policies.convert_no_mid_no_size_action,
+        }
+
+        try:
+            formated_action = convert_action[self.act_space](self, action)
+        except KeyError:
+            raise NotImplementedError(
+                f"Conversion not implemented for action_space: {self.act_space}"
+            )
+
         self.bid_sizes, self.ask_sizes, self.bids, self.asks = formated_action
 
     def _get_value(self):
@@ -319,6 +353,3 @@ class SBMMVecEnv(VecEnv):
 
     def seed(self, seed=None):
         self.env.seed(seed)
-
-
-from stable_baselines3.common.vec_env import VecNormalize

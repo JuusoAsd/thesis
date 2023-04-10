@@ -172,30 +172,38 @@ class ASPolicyVec:
         return self.get_action_no_mid_no_size(np.array(obs).T)
 
     def get_action_func(self):
-        action_func_dict = {
-            (
-                ObservationSpace.OSIObservation,
-                ActionSpace.NormalizedAction,
-            ): self.get_continuous_action,
-            (
-                ObservationSpace.SimpleObservation,
-                ActionSpace.NormalizedAction,
-            ): self.get_action_no_mid,
-            (
-                ObservationSpace.SimpleObservation,
-                ActionSpace.NoSizeAction,
-            ): self.get_action_no_mid_no_size,
-            (
-                LinearObservation,
-                ActionSpace.NoSizeAction,
-            ): self.get_no_size_action_linear,
-        }
-        input = (self.obs_type, self.act_type)
+        if type(self.obs_type) == ObservationSpace:
+            action_func_dict = {
+                (
+                    ObservationSpace.OSIObservation,
+                    ActionSpace.NormalizedAction,
+                ): self.get_continuous_action,
+                (
+                    ObservationSpace.SimpleObservation,
+                    ActionSpace.NormalizedAction,
+                ): self.get_action_no_mid,
+                (
+                    ObservationSpace.SimpleObservation,
+                    ActionSpace.NoSizeAction,
+                ): self.get_action_no_mid_no_size,
+                (
+                    LinearObservation,
+                    ActionSpace.NoSizeAction,
+                ): self.get_no_size_action_linear,
+            }
+            key = (self.obs_type, self.act_type)
+        elif type(self.obs_type) == LinearObservation:
+            action_func_dict = {
+                ActionSpace.NoSizeAction: self.get_no_size_action_linear,
+            }
+            key = self.act_type
+
         try:
-            return action_func_dict[input]
+            func = action_func_dict[key]
+            return func
         except KeyError:
             raise NotImplementedError(
-                "action func not implemented for this obs/act combination"
+                f"action func not implemented for this obs/act combination: {input}"
             )
 
 
