@@ -22,15 +22,6 @@ def get_integer_space(space_dict):
     )
 
 
-# def get_discrete_space(space_dict):
-#     return spaces.Discrete(
-#         np.array([space_dict[key][0] for key in space_dict.keys()]),
-#         high=np.array([space_dict[key][1] for key in space_dict.keys()]),
-#         shape=(len(space_dict.keys()),),
-#         dtype=int,
-#     )
-
-
 class ActionSpace(Enum):
     # Enum for different possible action spaces
     NormalizedAction = get_space(
@@ -52,14 +43,12 @@ class ActionSpace(Enum):
             "ask": [-20, 20],
         }
     )
-    # NormalizedDiscreteAction = get_discrete_space(
-    #     {
-    #         "bid_size": [0, 10],
-    #         "ask_size": [0, 10],
-    #         "bid": [-20, 20],
-    #         "ask": [-20, 20],
-    #     }
-    # )
+    NoSizeAction = get_space(
+        {
+            "bid": [-1, 1],
+            "ask": [-1, 1],
+        }
+    )
 
 
 class ObservationSpace(Enum):
@@ -91,37 +80,80 @@ class ObservationSpace(Enum):
             "intensity": [0, 100_000],
         }
     )
+    DummyObservation = get_space(
+        {
+            "inventory": [-1, 1],
+            "volatility": [-1, 1],
+            "intensity": [0, 1],
+        }
+    )
 
 
-def get_observation(env):
-    if env.params["observation_space"] == ObservationSpace.ASObservation:
-        return np.array(
-            [
-                env.current_state.best_bid,
-                env.current_state.best_ask,
-                env.get_inventory(env.current_state.mid_price),
-                env.current_state.volatility,
-                env.current_state.intensity,
-            ]
-        )
-    else:
-        raise ValueError("Invalid observation space")
+class LinearObservationSpaces(Enum):
+    SimpleLinearSpace = {
+        "inventory": {"min": -1, "max": 1, "min_actual": -3, "max_actual": 3},
+        "volatility": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 0.01},
+        "intensity": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 100_000},
+    }
 
 
-def apply_action(env, action):
-    if env.params["action_space"] == ActionSpace.NormalizedAction:
-        bid_size = action[0] * env.policy_params["max_order_size"]
-        ask_size = action[1] * env.policy_params["max_order_size"]
-        bid = (
-            action[2] * env.policy_params["max_ticks"] * env.policy_params["tick_size"]
-        )
-        ask = (
-            action[3] * env.policy_params["max_ticks"] * env.policy_params["tick_size"]
-        )
+class LinearObservation:
+    def __init__(
+        self,
+        obs_info_dict={
+            "volatility": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 50},
+        },
+        n_env=1,
+    ):
+        if type(obs_info_dict) == LinearObservationSpaces:
+            obs_info_dict = obs_info_dict.value
+        lows = []
+        highs = []
 
-        bid_price = round(env.current_state.mid_price + bid, env.price_decimals)
-        ask_price = round(env.current_state.mid_price + ask, env.price_decimals)
-        env.bid_size = bid_size
-        env.ask_size = ask_size
-        env.bid_price = bid_price
-        env.ask_price = ask_price
+        self.func_dict = {}
+        for k, v in obs_info_dict.items():
+            for i in ["min", "max", "min_actual", "max_actual"]:
+                if i not in v:
+                    raise ValueError(f"Missing {i} in obs_info_dict for {k}")
+            lows.append(v["min"])
+            highs.append(v["max"])
+            slope = (v["max_actual"] - v["min_actual"]) / (v["max"] - v["min"])
+            intercept = v["min_actual"] - slope * v["min"]
+
+            self.func_dict[k] = {
+                "intercept": intercept,
+                "slope": slope,
+                "min": v["min"],
+                "max": v["max"],
+                "min_actual": np.full(n_env, v["min_actual"]),
+                "max_actual": np.full(n_env, v["max_actual"]),
+            }
+
+        self.obs_space = spaces.Box(low=np.array(lows), high=np.array(highs))
+
+    def convert_to_readable(self, obs_dict={"volatility": 50}):
+        # convert from normalized to actual
+        actual_obs = {}
+        for k, v in obs_dict.items():
+            calculated_value = (
+                self.func_dict[k]["slope"] * v + self.func_dict[k]["intercept"]
+            )
+
+            actual_obs[k] = np.minimum(
+                np.maximum(calculated_value, self.func_dict[k]["min_actual"]),
+                self.func_dict[k]["max_actual"],
+            )
+        return actual_obs
+
+    def convert_to_normalized(self, obs_dict={"volatility": 0.2}):
+        # convert from actual to normalized
+        normalized_obs = {}
+        for obs_type, value in obs_dict.items():
+            calculated_value = (
+                value - self.func_dict[obs_type]["intercept"]
+            ) / self.func_dict[obs_type]["slope"]
+            normalized_obs[obs_type] = np.minimum(
+                np.maximum(calculated_value, self.func_dict[obs_type]["min"]),
+                self.func_dict[obs_type]["max"],
+            )
+        return normalized_obs
