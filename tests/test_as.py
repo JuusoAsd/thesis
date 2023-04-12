@@ -14,7 +14,6 @@ def test_read_line_trades(caplog):
         filepath,
         "r",
     ) as f:
-
         columns = f.readline().rstrip().split(",")
         col = {k: n for n, k in enumerate(columns)}
 
@@ -59,6 +58,7 @@ def test_hummingbot(caplog):
     b = 0.1
 
     size = [curve_func(p - last_price, a, b) for p in trade_price_levels]
+    print(size)
 
     timestamp = pd.Timestamp("2019-01-01", tz="UTC").timestamp()
     timestamp += 1

@@ -9,6 +9,10 @@ def curve_func(t, a, b):
     return a * np.exp(-b * t)
 
 
+def line_func(t, a, b):
+    return -a * t + b
+
+
 class EstimatorABC:
     def __init__(self, lookback, update_interval):
         self.lookback = lookback
@@ -66,8 +70,45 @@ class IntensityEstimator(EstimatorABC):
             self.kappa = kappa
 
     def fit_curve(self, price_levels, lambdas):
+        # if len(price_levels) > 300:
+        #     # print price levels and lambdas row by row
+        #     for i in range(len(price_levels)):
+        #         print(f"{price_levels[i]}, {lambdas[i]}")
+        # a = 2
+        # k = 0.1
+        # t = range(1, 1996)
+        # size = [curve_func(p, a, k) for p in t]
+
+        # x = -np.array(t)
+        # y = np.log(size)
+
+        # covar = np.cov(x, y, bias=True)
+        # var = np.var(x)
+
+        # intercept = covar[0, 1] / var
+        # slope = np.mean(y) - intercept * np.mean(x)
+
+        # a_calc = np.exp(slope)
+        # k_calc = intercept
+        # print(f"cova: {covar}, var: {var}")
+
+        # print(a_calc, k_calc)
+
+        # x = price_levels
+        # y = np.log(lambdas)
+        # cov = np.cov(x, y, bias=True)
+        # var = np.var(x)
+        # slope = cov[0, 1] / var
+        # intercept = np.mean(y) - slope * np.mean(x)
+
+        # intercept_hat = np.exp(intercept)
+        # slope_hat = -slope
+        # print(cov, var)
+        # print(f"sample: {len(price_levels)}")
+        # print(f"intercept_hat: {intercept_hat}, slope_hat: {slope_hat}")
+
         try:
-            param, _ = curve_fit(
+            param, diag = curve_fit(
                 f=curve_func,
                 xdata=price_levels,
                 ydata=lambdas,
@@ -75,8 +116,23 @@ class IntensityEstimator(EstimatorABC):
                 method="dogbox",
                 bounds=([0, 0], [np.inf, np.inf]),
             )
+
+            # param2, _ = curve_fit(
+            #     f=line_func,
+            #     xdata=x,
+            #     ydata=y,
+            #     p0=(self.alpha, self.kappa),
+            #     method="dogbox",
+            #     bounds=([0, 0], [np.inf, np.inf]),
+            # )
+
+            # print(param2)
             alpha = param[0]
             kappa = param[1]
+            # print(f"alpha: {alpha}, kappa: {kappa}\n")
+            # print(diag)
+            # if len(price_levels) > 300:
+            #     exit()
             return alpha, kappa
 
         except RuntimeError as e:
@@ -201,7 +257,7 @@ class OSIEstimator(EstimatorABC):
 
             self.calculate_values()
             self.previous_update = ts
-        return self.osi
+        return round(self.osi, 2)
 
 
 # # you can run this by running python -m pytest tests/test_as.py -v -s

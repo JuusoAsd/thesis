@@ -2,8 +2,8 @@ use super::parse_util::Side;
 use csv::{Reader, ReaderBuilder, StringRecord, StringRecordsIntoIter};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::fs::File;
+use std::fs::{self, ReadDir};
 use std::path::{Path, PathBuf};
 use std::vec::IntoIter;
 
@@ -185,23 +185,21 @@ pub fn read_all_lines() {
     println!("Total: {}", total_count);
 }
 
-pub fn get_folder_update_files(folder_path: &PathBuf) -> Vec<PathBuf> {
+use walkdir::WalkDir;
+pub fn get_csv_files_sorted(target_path: &PathBuf) -> Vec<PathBuf> {
+    // Input is a folder, this iterates through the content and returns all csv files
     let mut path_vec = Vec::new();
-    let paths = fs::read_dir(folder_path).unwrap();
-    for path in paths {
-        let sub_path = fs::read_dir(path.unwrap().path()).unwrap();
-        for sub_path in sub_path {
-            let file_path = sub_path.as_ref().unwrap().path();
-            if sub_path
-                .unwrap()
-                .path()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .contains("depth_update.csv")
-            {
-                path_vec.push(file_path);
+    for entry in WalkDir::new(target_path) {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.is_file() {
+            match path.extension() {
+                Some(ext) => {
+                    if ext == "csv" {
+                        path_vec.push(path.to_path_buf());
+                    }
+                }
+                None => continue,
             }
         }
     }
@@ -209,59 +207,30 @@ pub fn get_folder_update_files(folder_path: &PathBuf) -> Vec<PathBuf> {
     path_vec
 }
 
-pub fn get_folder_files(folder_path: &PathBuf) -> Vec<PathBuf> {
+pub fn get_folder_update_files(folder_path: &PathBuf) -> Vec<PathBuf> {
+    let csv_files = get_csv_files_sorted(folder_path);
     let mut path_vec = Vec::new();
-    let files = match fs::read_dir(folder_path) {
-        Ok(files) => files,
-        Err(_) => {
-            println!("Error reading folder: {}", folder_path.to_str().unwrap());
-            return path_vec;
+    for file in csv_files {
+        let file_name = file.file_name().unwrap().to_str().unwrap();
+        if file_name.contains("_depth_update") {
+            path_vec.push(file);
         }
-    };
-    for file in files {
-        let file_path = file.as_ref().unwrap().path();
-        path_vec.push(file_path);
     }
     path_vec.sort();
     path_vec
 }
 
 pub fn get_first_snapshot_file(folder_path: &PathBuf) -> Option<PathBuf> {
-    let folder = match fs::read_dir(folder_path) {
-        Ok(folder) => folder,
-        Err(_) => {
-            panic!("Error reading folder: {}", folder_path.to_str().unwrap());
-        }
-    };
-    for sub_folders in folder {
-        let ok_sub_folder = match sub_folders {
-            Ok(sub_folder) => sub_folder,
-            Err(_) => {
-                panic!("Error reading subfolder");
-            }
-        };
-        let ok_sub_path = match fs::read_dir(ok_sub_folder.path()) {
-            Ok(sub_path) => sub_path,
-            Err(_) => {
-                panic!("Error reading subfolder paths");
-            }
-        };
-        for sub_path in ok_sub_path {
-            let file_path = sub_path.as_ref().unwrap().path();
-            if sub_path
-                .unwrap()
-                .path()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .contains("depth_snap.csv")
-            {
-                return Some(file_path);
-            }
+    let csv_files = get_csv_files_sorted(folder_path);
+    let mut path_vec = Vec::new();
+    for file in csv_files {
+        let file_name = file.file_name().unwrap().to_str().unwrap();
+        if file_name.contains("depth_snap") {
+            path_vec.push(file);
         }
     }
-    None
+    path_vec.sort();
+    Some(path_vec.remove(0))
 }
 
 pub fn get_file_date(file_path: &Path) -> String {
