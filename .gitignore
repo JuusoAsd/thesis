@@ -353,3 +353,4 @@ cython_debug/
 .DS_Store
 raw_data/
 models/
+*.env
