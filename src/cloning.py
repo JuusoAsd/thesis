@@ -168,7 +168,7 @@ def clone_bc(venv, expert_trainer, student_model, duration, testing=True):
         CloneDuration.Long: {
             "min_episodes": venv.env.n_envs,
             "evaluation_freq": 25_000,
-            "n_batches": 50_000,
+            "n_batches": 50_0,
         },
         CloneDuration.VeryLong: {
             "min_episodes": 10_000_000,
@@ -365,6 +365,40 @@ def model_cloning():
     )
 
 
+from environments.util import setup_venv
+from data_management import get_data_by_dates
+
+
+def cloning_v2():
+    data = get_data_by_dates("2021-12-21", days=1)
+    venv = setup_venv(data=data, n_env=8)
+
+    cloning_duration = CloneDuration.Short
+    expert_policy = ASPolicyVec
+    expert_params = {
+        "max_order_size": 5,
+        "tick_size": 0.0001,
+        "max_ticks": 10,
+        "price_decimals": 4,
+        "inventory_target": 0,
+        "risk_aversion": 0.2,
+        "order_size": 1,
+        "obs_type": venv.env.obs_space,
+        "act_type": venv.env.act_space,
+    }
+    expert = expert_policy(env=venv.env, **expert_params)
+    student_model = PPO("MlpPolicy", venv, verbose=1)
+
+    model_name = clone_bc(venv, expert, student_model, cloning_duration)
+    compare_cloned(
+        venv,
+        model_name,
+        expert_policy,
+        expert_params,
+        action_count=10,
+    )
+
+
 if __name__ == "__main__":
     # clone_manual_policy_dagger()
     # clone_manual_policy_bc()
@@ -372,5 +406,6 @@ if __name__ == "__main__":
     # clone_simple_policy()
     # clone_simple_policy_dagger()
     # compare_cloned()
-    model_cloning()
+    # model_cloning()
     # test_normalized_env()
+    cloning_v2()
