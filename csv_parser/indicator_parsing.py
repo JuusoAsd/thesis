@@ -32,11 +32,16 @@ class BaseReader:
         if line == "":
             return False
         timestamp, bid, ask, low, high, _, _ = line.rstrip().split(",")
-        mid = (float(bid) + float(ask)) / 2
+        bid = float(bid)
+        ask = float(ask)
+        mid = round((bid + ask) / 2, 5)
         timestamp = int(timestamp)
         low = float(low)
         high = float(high)
+
         self.last_timestamp = timestamp
+        self.last_bid = bid
+        self.last_ask = ask
         self.last_mid = mid
         self.last_low = low
         self.last_high = high
@@ -44,7 +49,14 @@ class BaseReader:
         return True
 
     def get_last(self):
-        return [self.last_timestamp, self.last_mid, self.last_low, self.last_high]
+        return [
+            self.last_timestamp,
+            self.last_bid,
+            self.last_ask,
+            self.last_mid,
+            self.last_low,
+            self.last_high,
+        ]
 
 
 class IndicatorReader:
@@ -72,6 +84,7 @@ class IndicatorReader:
         mid = round(float(mid), 5)
         size = float(size)
         price = float(price)
+
         self.last_timestamp = timestamp
         self.last_mid = mid
         self.last_size = size
@@ -149,6 +162,8 @@ def parse_indicators_v1():
                 writer.writerow(
                     [
                         "timestamp",
+                        "best_bid",
+                        "best_ask",
                         "mid_price",
                         "low_price",
                         "high_price",
