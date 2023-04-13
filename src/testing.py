@@ -33,10 +33,6 @@ from stable_baselines3.common.vec_env import VecNormalize
 from environments.env_configs.spaces import ActionSpace, ObservationSpace
 from environments.env_configs.policies import (
     ASPolicyVec,
-    AlwaysSamePolicyVec,
-    SimplePolicyVec,
-    RoundingPolicyVec,
-    NThDigitPolicyVec,
 )
 from environments.mm_env_vec import MMVecEnv, SBMMVecEnv
 from environments.env_configs.util import ExponentialBetaSchedule, BCEvalCallback
@@ -507,6 +503,50 @@ def test_overlapping():
             break
 
 
+from environments.util import setup_venv
+from data_management import get_data_by_dates
+from cloning import load_trained_model
+
+
+def test_cloning_vs_manual():
+    data = get_data_by_dates("2021-12-23")
+    venv = setup_venv(data=data, n_env=1)
+    model = load_trained_model("clone_bc", venv)
+
+    expert_venv = setup_venv(data=data, n_env=1)
+    expert_policy = ASPolicyVec
+    expert_params = {
+        "max_order_size": 5,
+        "tick_size": 0.0001,
+        "max_ticks": 10,
+        "price_decimals": 4,
+        "inventory_target": 0,
+        "risk_aversion": 0.2,
+        "order_size": 1,
+        "obs_type": venv.env.obs_space,
+        "act_type": venv.env.act_space,
+    }
+
+    expert = expert_policy(env=expert_venv.env, **expert_params)
+    action_func = expert.get_action_func()
+    obs_model = venv.reset()
+    obs_expert = expert_venv.reset()
+    done = False
+    n_steps = 0
+    print_step = 10_000
+    while not done:
+        action_model = model.predict(obs_model, deterministic=True)[0]
+        action_expert = action_func(obs_expert)
+
+        obs_model, _, done, _ = venv.step(action_model)
+        obs_expert, _, done, _ = expert_venv.step(action_expert)
+
+        n_steps += 1
+
+    print(f"Model: {venv.env.get_metrics()}")
+    print(f"Expert: {expert_venv.env.get_metrics()}")
+
+
 if __name__ == "__main__":
     # run_random_initialized_model()
     # run_random_initialized_model_non_vec()
@@ -518,4 +558,5 @@ if __name__ == "__main__":
     # load_random_init_model()
     # test_linear_obs()
     # test_no_size_normalized()
-    test_overlapping()
+    # test_overlapping()
+    test_cloning_vs_manual()

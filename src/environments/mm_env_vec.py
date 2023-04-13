@@ -29,9 +29,10 @@ class MMVecEnv(gym.Env):
         max_order_size=10,
         data_portion=0.9,
         max_diff=0.001,
+        record_values=False,
     ):
         self.n_envs = n_envs
-
+        self.record_values = record_values
         self.data_points = len(data) - 1
         if data_portion * self.n_envs < 1:
             start = np.array(range(self.n_envs)) * data_portion
@@ -74,6 +75,11 @@ class MMVecEnv(gym.Env):
             self.observation_space = self.obs_space.obs_space
         self.act_space = params["action_space"]
         self.action_space = params["action_space"].value
+        self.values = []
+        self.inventory = []
+        self.trade_market = np.zeros(self.n_envs)
+        self.trade_limit = np.zeros(self.n_envs)
+
         self.reset()
         return None
 
@@ -86,10 +92,6 @@ class MMVecEnv(gym.Env):
         self.asks = np.zeros(self.n_envs)
         self.ask_sizes = np.zeros(self.n_envs)
         self.current_step = self.start_steps.copy()
-        self.values = []
-        self.inventory = []
-        self.trade_market = np.zeros(self.n_envs)
-        self.trade_limit = np.zeros(self.n_envs)
         return self._get_observation()
 
     def step(self, action_vec):
@@ -103,7 +105,6 @@ class MMVecEnv(gym.Env):
 
         # update timeseries variables amd produce observation
         value_end = self._get_value()
-        self.values.append(value_end)  # VECTORIZE
 
         reward = self.reward_class.end_step()
 
@@ -113,9 +114,12 @@ class MMVecEnv(gym.Env):
         # increment step unless episode is done
         self.current_step += 1 - is_over
         obs = self._get_observation()
-        self.inventory.append(obs[:, 1])  # VECTORIZE
         is_dones = is_over.T
         info = np.repeat({}, self.n_envs)
+
+        if self.record_values:
+            self.values.append(value_end)  # VECTORIZE
+            self.inventory.append(obs[:, 1])  # VECTORIZE
 
         for i in range(self.n_envs):
             if is_dones[i]:
@@ -269,6 +273,7 @@ class MMVecEnv(gym.Env):
         return self.quote + self.inventory_qty * self.mid_price[self.current_step]
 
     def get_metrics(self):
+        assert self.record_values, "Must set record_values to True to get metrics"
         total_return = self.values[-1] / self.values[0] - 1  # VECTORIZE
         drawdown = (self.values / np.maximum.accumulate(self.values) - 1).min()
         volatility = np.std(np.diff(np.array(self.values)[:, 0]))  # VECTORIZE
