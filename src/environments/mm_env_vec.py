@@ -1,5 +1,7 @@
 import os
 import logging
+from itertools import product
+import logging
 import pandas as pd
 import numpy as np
 import gym
@@ -17,37 +19,67 @@ class MMVecEnv(gym.Env):
     def __init__(
         self,
         data,
+        n_envs=1,
         capital=1000,
         price_decimals=4,
         tick_size=0.0001,
         inventory_target=0,
-        n_envs=1,
         reward_class=BaseRewardClass,
         reward_params={},
         column_mapping={},
         params={},
         max_order_size=10,
-        data_portion=0.9,
         max_diff=0.001,
-        record_values=False,
+        record_values=True,
+        time_envs=1,
+        data_portion=0.9,
+        inv_envs=1,
+        inv_jump=0.25,
     ):
-        self.n_envs = n_envs
-        self.record_values = record_values
+        if inv_envs % 2 == 0:
+            logging.warning(f"Using {inv_envs} inv_envs, prefer using odd number")
+        if (inv_envs - 1) * inv_jump >= 1:
+            # TODO: allowed range for norm_inventory is currently [-3,3], this should accomodate
+            raise ValueError(f"inv_jump {inv_jump} too large for {inv_envs} inv_envs")
+
         self.data_points = len(data) - 1
-        if data_portion * self.n_envs < 1:
-            start = np.array(range(self.n_envs)) * data_portion
+        self.record_values = record_values
+        self.n_envs = time_envs * inv_envs
+        """
+        - time_envs: how many envs with different starting and ending times
+            - data_portion: how much of the data is used for each env
+        - inv_envs: how many envs with different starting inventory (prefer to be odd number)
+            - inv_jump: how much the inventory jumps between envs
+
+        """
+        if data_portion * time_envs < 1:
+            start = np.array(range(time_envs)) * data_portion
             end = start + data_portion
             start_val = start * self.data_points
             end_val = end * self.data_points
 
         else:
-            offset = (1 - data_portion) / (self.n_envs - 1)
-            start = np.array(range(self.n_envs)) * offset
+            offset = (1 - data_portion) / (time_envs - 1)
+            start = np.array(range(time_envs)) * offset
             end = start + data_portion
             start_val = start * self.data_points
             end_val = end * self.data_points
-        self.start_steps = start_val.astype(int)
-        self.end_steps = end_val.astype(int)
+        start_val = start_val.astype(int)
+        end_val = end_val.astype(int)
+
+        inv_envs -= 1
+        inv_envs_list = [0]
+        for i in range(inv_envs):
+            mult = int(i / 2 + 1)
+            if i % 2 == 0:
+                inv_envs_list.append(inv_jump * mult)
+            else:
+                inv_envs_list.append(-inv_jump * mult)
+
+        env_list = list(product(zip(start_val, end_val), inv_envs_list))
+        self.start_steps = np.array([i[0][0] for i in env_list])
+        self.end_steps = np.array([i[0][1] for i in env_list])
+        self.start_inv = np.array([i[1] for i in env_list])
 
         self.max_diff = max_diff
         self.capital = capital
@@ -84,14 +116,24 @@ class MMVecEnv(gym.Env):
         return None
 
     def reset(self):
-        self.inventory_qty = np.zeros(self.n_envs)
+        self.current_step = self.start_steps.copy()
+        # start inventory (normalized)
+        i = self.start_inv.copy()
+        # cash
+        c = np.full(self.n_envs, float(self.capital))
+        t = self.inventory_target
+        p = self.mid_price[self.current_step]
+        self.inventory_qty = -(c * (t + i)) / (p * (t + i - 1))
+        # get current price for each env to get all of them to have same total value
+        inventory_value = self.inventory_qty * p
+        self.quote = self.capital - inventory_value
+
+        # this is updated when calling _get_observation, can initialize at 0
         self.norm_inventory = np.zeros(self.n_envs)
-        self.quote = np.full(self.n_envs, float(self.capital))
         self.bids = np.array(0 * self.n_envs).astype(np.float64)
         self.bid_sizes = np.zeros(self.n_envs)
         self.asks = np.zeros(self.n_envs)
         self.ask_sizes = np.zeros(self.n_envs)
-        self.current_step = self.start_steps.copy()
         return self._get_observation()
 
     def step(self, action_vec):
@@ -105,7 +147,8 @@ class MMVecEnv(gym.Env):
 
         # update timeseries variables amd produce observation
         value_end = self._get_value()
-
+        if self.record_values:
+            self.values.append(value_end)  # VECTORIZE
         reward = self.reward_class.end_step()
 
         # determine if episode is done
@@ -118,7 +161,6 @@ class MMVecEnv(gym.Env):
         info = np.repeat({}, self.n_envs)
 
         if self.record_values:
-            self.values.append(value_end)  # VECTORIZE
             self.inventory.append(obs[:, 1])  # VECTORIZE
 
         for i in range(self.n_envs):
@@ -266,7 +308,6 @@ class MMVecEnv(gym.Env):
             raise NotImplementedError(
                 f"Conversion not implemented for action_space: {self.act_space}"
             )
-
         self.bid_sizes, self.ask_sizes, self.bids, self.asks = formated_action
 
     def _get_value(self):

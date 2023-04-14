@@ -133,7 +133,7 @@ def load_trained_model(name, venv, normalize=True):
         normalized_venv = VecNormalize.load(normalize_path, venv)
         model = PPO.load(model_path, env=normalized_venv)
     else:
-        model = PPO.load(model_path)
+        model = PPO.load(path=model_path, env=venv)
 
     return model
 
@@ -370,8 +370,17 @@ from data_management import get_data_by_dates
 
 
 def cloning_v2():
-    data = get_data_by_dates("2021-12-21", days=1)
-    venv = setup_venv(data=data, n_env=8)
+    data = get_data_by_dates("2021-12-23")
+
+    venv = setup_venv(
+        data=data,
+        act_space=ActionSpace.NormalizedAction,
+        inv_envs=5,
+        time_envs=8,
+        env_params={
+            "inv_jump": 0.18,
+        },
+    )
 
     cloning_duration = CloneDuration.Short
     expert_policy = ASPolicyVec
@@ -390,13 +399,13 @@ def cloning_v2():
     student_model = PPO("MlpPolicy", venv, verbose=1)
 
     model_name = clone_bc(venv, expert, student_model, cloning_duration)
-    compare_cloned(
-        venv,
-        model_name,
-        expert_policy,
-        expert_params,
-        action_count=10,
-    )
+    # compare_cloned(
+    #     venv,
+    #     model_name,
+    #     expert_policy,
+    #     expert_params,
+    #     action_count=10,
+    # )
 
 
 if __name__ == "__main__":

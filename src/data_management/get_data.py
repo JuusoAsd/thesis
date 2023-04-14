@@ -16,7 +16,7 @@ def get_data_by_dates(start_date: Union[datetime, str], end_date=None, days=None
     data_path = os.getenv("DATA_PATH")
 
     start_date = (
-        datetime.strptime(start_date, "%Y-%m-%d")
+        datetime.strptime(start_date, "%Y_%m_%d")
         if isinstance(start_date, str)
         else start_date
     )
@@ -29,7 +29,7 @@ def get_data_by_dates(start_date: Union[datetime, str], end_date=None, days=None
         end_date = start_date + timedelta(days=days)
     else:
         end_date = (
-            datetime.strptime(end_date, "%Y-%m-%d")
+            datetime.strptime(end_date, "%Y_%m_%d")
             if isinstance(end_date, str)
             else end_date
         )

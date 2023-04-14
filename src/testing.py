@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import gym
 
 from stable_baselines3 import PPO, A2C
-
+import copy
 
 from environments.env_configs.spaces import ActionSpace, ObservationSpace
 from environments.env_configs.policies import ASPolicyVec
@@ -506,14 +506,60 @@ def test_overlapping():
 from environments.util import setup_venv
 from data_management import get_data_by_dates
 from cloning import load_trained_model
+import time
+
+
+def test_step_speed():
+    data = get_data_by_dates("2021-12-23")
+    venv = setup_venv(data=data, n_env=8)
+    model = load_trained_model("clone_bc", venv)
+    obs_model = venv.reset()
+    done = False
+    n_steps = 0
+    print_step = 10_000
+    start_time = time.time()
+    while not done:
+        action_model = model.predict(obs_model, deterministic=True)[0]
+        obs_model, _, dones, _ = venv.step(action_model)
+        done = np.all(dones)
+
+        n_steps += 1
+    end_time = time.time()
+    total_time = end_time - start_time
+    time_per_step = total_time / n_steps
+    time_per_step_per_env = time_per_step / venv.env.n_envs
+    print(f"using {venv.env.n_envs} envs: {time_per_step_per_env} per step per env")
+
+    data = get_data_by_dates("2021-12-23")
+    venv = setup_venv(data=data, n_env=32)
+    model = load_trained_model("clone_bc", venv)
+    obs_model = venv.reset()
+    done = False
+    n_steps = 0
+    print_step = 10_000
+    start_time = time.time()
+    while not done:
+        action_model = model.predict(obs_model, deterministic=True)[0]
+        obs_model, _, dones, _ = venv.step(action_model)
+        done = np.all(dones)
+        n_steps += 1
+    end_time = time.time()
+    total_time = end_time - start_time
+    time_per_step = total_time / n_steps
+    time_per_step_per_env = time_per_step / venv.env.n_envs
+    print(f"using {venv.env.n_envs} envs: {time_per_step_per_env} per step per env")
 
 
 def test_cloning_vs_manual():
-    data = get_data_by_dates("2021-12-23")
-    venv = setup_venv(data=data, n_env=1)
+    data = get_data_by_dates("2021_12_23")
+    venv = setup_venv(
+        data=data,
+        act_space=ActionSpace.NormalizedAction,
+    )
     model = load_trained_model("clone_bc", venv)
 
-    expert_venv = setup_venv(data=data, n_env=1)
+    expert_venv = copy.deepcopy(venv)
+
     expert_policy = ASPolicyVec
     expert_params = {
         "max_order_size": 5,
@@ -547,6 +593,61 @@ def test_cloning_vs_manual():
     print(f"Expert: {expert_venv.env.get_metrics()}")
 
 
+def test_inventory_environments():
+    data = get_data_by_dates("2021-12-23")
+    venv = setup_venv(
+        data=data, time_envs=1, inv_envs=10, env_params={"inv_jump": 0.09}
+    )
+    print(venv.reset())
+    print(venv.env._get_value())
+
+
+def test_trained_model():
+    model_date = "2021_12_23"
+    data_date = "2021_12_24"
+    data = get_data_by_dates(data_date)
+    venv = setup_venv(
+        data=data,
+        act_space=ActionSpace.NormalizedAction,
+    )
+    expert_venv = copy.deepcopy(venv)
+    model = load_trained_model(model_date, venv)
+    expert_policy = ASPolicyVec
+    expert_params = {
+        "max_order_size": 5,
+        "tick_size": 0.0001,
+        "max_ticks": 10,
+        "price_decimals": 4,
+        "inventory_target": 0,
+        "risk_aversion": 0.2,
+        "order_size": 1,
+        "obs_type": venv.env.obs_space,
+        "act_type": venv.env.act_space,
+    }
+
+    expert = expert_policy(env=expert_venv.env, **expert_params)
+    action_func = expert.get_action_func()
+    obs_model = venv.reset()
+    obs_expert = expert_venv.reset()
+    done = False
+    n_steps = 0
+    print_obs = 10_000
+    while not done:
+        action_model = model.predict(obs_model, deterministic=True)[0]
+        action_expert = action_func(obs_expert)
+
+        obs_model, _, done, _ = venv.step(action_model)
+        obs_expert, _, done, _ = expert_venv.step(action_expert)
+
+        n_steps += 1
+
+        if n_steps % print_obs == 0:
+            print(f"Model: {action_model.tolist()}")
+            print(f"Expert: {action_expert.tolist()}")
+    print(f"Model: {venv.env.get_metrics()}")
+    print(f"Expert: {expert_venv.env.get_metrics()}")
+
+
 if __name__ == "__main__":
     # run_random_initialized_model()
     # run_random_initialized_model_non_vec()
@@ -559,4 +660,8 @@ if __name__ == "__main__":
     # test_linear_obs()
     # test_no_size_normalized()
     # test_overlapping()
-    test_cloning_vs_manual()
+    # test_cloning_vs_manual()
+
+    # test_step_speed()
+    # test_inventory_environments()
+    test_trained_model()

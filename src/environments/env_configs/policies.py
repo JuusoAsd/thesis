@@ -171,6 +171,18 @@ class ASPolicyVec:
             obs.append(obs_dict_converted[i])
         return self.get_action_no_mid_no_size(np.array(obs).T)
 
+    def get_action_no_mid_linear(self, observation):
+        obs_dict = {
+            "inventory": observation[:, 0],
+            "volatility": observation[:, 1],
+            "intensity": observation[:, 2],
+        }
+        obs_dict_converted = self.obs_type.convert_to_readable(obs_dict)
+        obs = []
+        for i in ["inventory", "volatility", "intensity"]:
+            obs.append(obs_dict_converted[i])
+        return self.get_action_no_mid(np.array(obs).T)
+
     def get_action_func(self):
         if type(self.obs_type) == ObservationSpace:
             action_func_dict = {
@@ -195,6 +207,7 @@ class ASPolicyVec:
         elif type(self.obs_type) == LinearObservation:
             action_func_dict = {
                 ActionSpace.NoSizeAction: self.get_no_size_action_linear,
+                ActionSpace.NormalizedAction: self.get_action_no_mid_linear,
             }
             key = self.act_type
 
@@ -209,8 +222,10 @@ class ASPolicyVec:
 
 def convert_continuous_action(env, action):
     # this is not fully continuous but uses float and looks like one
-    bid_sizes = np.full(env.n_envs, 1)
-    ask_sizes = np.full(env.n_envs, 1)
+    bid_sizes = np.round(action[:, 0] * env.max_order_size)
+    ask_sizes = np.round(action[:, 1] * env.max_order_size)
+    # bid_sizes = np.full(env.n_envs, 1)
+    # ask_sizes = np.full(env.n_envs, 1)
 
     bid_diff = action[:, 2] * env.max_diff
     bid_price = env.mid_price[env.current_step] + bid_diff

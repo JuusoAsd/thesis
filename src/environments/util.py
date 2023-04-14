@@ -11,23 +11,25 @@ from environments.env_configs.spaces import (
 def setup_venv(
     data,
     obs_space=LinearObservation(LinearObservationSpaces.SimpleLinearSpace),
-    act_space=ActionSpace.NoSizeAction,
+    act_space=ActionSpace.NormalizedAction,
     reward_class=InventoryIntegralPenalty,
-    n_env=1,
     normalize=False,
+    time_envs=1,
+    inv_envs=1,
     env_params={},
     venv_params={},
 ):
     column_mapping = {col: n for (n, col) in enumerate(data.columns)}
     env = MMVecEnv(
         data.to_numpy(),
-        n_envs=n_env,
         params={
             "observation_space": obs_space,
             "action_space": act_space,
         },
         column_mapping=column_mapping,
         reward_class=reward_class,
+        time_envs=time_envs,
+        inv_envs=inv_envs,
         **env_params,
     )
     venv = SBMMVecEnv(env, **venv_params)

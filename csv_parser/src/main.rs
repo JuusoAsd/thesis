@@ -129,12 +129,11 @@ use std::env;
 //     )
 // }
 
-fn parse_data_time_aggregation() {
+fn parse_data_time_aggregation(file_count: usize) {
     // produces a csv with data aggregated on timestamp_aggregation interval
     // data contains timestamp,best_bid,best_ask,low_price,high_price,buy_volume,sell_volume for the time interval
     // benchmark speed is 1M per second
-    let file_count = 3;
-
+    println!("Parsing data with time aggregation");
     let target_path = PathBuf::from(env::var("TARGET_PATH_BASE").unwrap());
     let timestamp_aggregation = 1000;
 
@@ -190,8 +189,8 @@ fn parse_data_time_aggregation() {
     )
 }
 
-fn parse_interim_data() {
-    let file_count = 3;
+fn parse_interim_data(file_count: usize) {
+    println!("Parsing interim data");
     let target_path = PathBuf::from(env::var("TARGET_PATH_INTERIM").unwrap());
 
     let update_path = PathBuf::from(env::var("UPDATE_PATH").unwrap());
@@ -248,6 +247,7 @@ fn main() {
         Ok(_) => println!("Loaded .env file"),
         Err(e) => println!("Error loading .env file: {}", e),
     }
-    parse_interim_data();
-    // parse_data_time_aggregation();
+    let file_count = 6;
+    parse_interim_data(file_count);
+    parse_data_time_aggregation(file_count);
 }

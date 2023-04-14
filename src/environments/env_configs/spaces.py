@@ -91,7 +91,7 @@ class ObservationSpace(Enum):
 
 class LinearObservationSpaces(Enum):
     SimpleLinearSpace = {
-        "inventory": {"min": -1, "max": 1, "min_actual": -3, "max_actual": 3},
+        "inventory": {"min": -1, "max": 1, "min_actual": -2, "max_actual": 2},
         "volatility": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 0.01},
         "intensity": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 100_000},
     }
