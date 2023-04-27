@@ -22,10 +22,12 @@ def get_data_by_dates(start_date: Union[datetime, str], end_date=None, days=None
     )
     if end_date is None:
         if days is None:
-            return pd.read_csv(
-                os.path.join(data_path, start_date.strftime("%Y_%m_%d"), "data.csv")
-            )
-
+            try:
+                return pd.read_csv(
+                    os.path.join(data_path, start_date.strftime("%Y_%m_%d"), "data.csv")
+                )
+            except Exception as e:
+                raise Exception(f"Error reading file: {e}")
         end_date = start_date + timedelta(days=days)
     else:
         end_date = (
@@ -45,17 +47,19 @@ def get_data_by_dates(start_date: Union[datetime, str], end_date=None, days=None
                 files.append(os.path.join(data_path, folder, "data.csv"))
 
     # compare lenght of files with the number of days
-    print(f"Found {len(files)} files")
     if len(files) != (end_date - start_date).days + 1:
         print(
             f"Number of files({len(files)}) does not match the number of days given({(end_date - start_date).days + 1})"
         )
-
-    df = pd.read_csv(files[0])
-    for file in files[1:]:
-        df = pd.concat([df, pd.read_csv(file)])
-    df.sort_values(by="timestamp", inplace=True)
-    return df
+    try:
+        df = pd.read_csv(files[0])
+        for file in files[1:]:
+            df = pd.concat([df, pd.read_csv(file)])
+        df.sort_values(by="timestamp", inplace=True)
+        return df
+    except Exception as e:
+        raise Exception(f"Error reading files: {e}")
+        return None
 
 
 if __name__ == "__main__":

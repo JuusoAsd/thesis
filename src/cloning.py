@@ -123,17 +123,17 @@ def save_trained_model(model, path):
         wrapper.save(str(model_dir / (path + "_vec_normalize.pkl")))
 
 
-def load_trained_model(name, venv, normalize=True):
+def load_trained_model(name, venv, normalize=True, model_kwargs={}):
     model_dict = {}
-    model_dir = Path(f"{os.getcwd()}/models")
+    model_dir = Path(f"{os.getenv('COMMON_PATH')}/models")
 
     model_path = str(model_dir / name)
     normalize_path = str(model_dir / (name + "_vec_normalize.pkl"))
     if os.path.exists(normalize_path) and normalize:
         normalized_venv = VecNormalize.load(normalize_path, venv)
-        model = PPO.load(model_path, env=normalized_venv)
+        model = PPO.load(model_path, env=normalized_venv, **model_kwargs)
     else:
-        model = PPO.load(path=model_path, env=venv)
+        model = PPO.load(path=model_path, env=venv, **model_kwargs)
 
     return model
 

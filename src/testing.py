@@ -1,4 +1,5 @@
 import os
+import logging
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
@@ -10,7 +11,7 @@ import copy
 from environments.env_configs.spaces import ActionSpace, ObservationSpace
 from environments.env_configs.policies import ASPolicyVec
 from environments.mm_env_vec import MMVecEnv, SBMMVecEnv
-
+from datetime import datetime, timedelta
 from environments.env_configs.rewards import *
 
 load_dotenv()
@@ -602,8 +603,8 @@ def test_inventory_environments():
     print(venv.env._get_value())
 
 
-def test_trained_model():
-    model_date = "2021_12_23"
+def test_trained_model_custom():
+    model_name = "clone_to_assymetricpnl"
     data_date = "2021_12_24"
     data = get_data_by_dates(data_date)
     venv = setup_venv(
@@ -611,7 +612,7 @@ def test_trained_model():
         act_space=ActionSpace.NormalizedAction,
     )
     expert_venv = copy.deepcopy(venv)
-    model = load_trained_model(model_date, venv)
+    model = load_trained_model(model_name, venv)
     expert_policy = ASPolicyVec
     expert_params = {
         "max_order_size": 5,
@@ -648,20 +649,95 @@ def test_trained_model():
     print(f"Expert: {expert_venv.env.get_metrics()}")
 
 
-if __name__ == "__main__":
-    # run_random_initialized_model()
-    # run_random_initialized_model_non_vec()
-    # run_random_initialized_model_new_model()
-    # test_simple_policy()
-    # test_simple_policy_vec()
-    # run_random_initialized_model_non_vec_no_size()
-    # test_imitation_simple_policy()
-    # load_random_init_model()
-    # test_linear_obs()
-    # test_no_size_normalized()
-    # test_overlapping()
-    # test_cloning_vs_manual()
+def test_trained_model(venv, model):
+    logging.info("Testing trained model")
+    obs = venv.reset()
+    done = False
+    n_steps = 0
+    while not done:
+        action = model.predict(obs, deterministic=True)[0]
+        obs, _, done, _ = venv.step(action)
+    print(f"Metrics: {venv.env.get_metrics()}")
 
-    # test_step_speed()
-    # test_inventory_environments()
-    test_trained_model()
+
+def test_trained_vs_manual(venv, model):
+    expert_venv = copy.deepcopy(venv)
+    expert_policy = ASPolicyVec
+    expert_params = {
+        "max_order_size": 5,
+        "tick_size": 0.0001,
+        "max_ticks": 10,
+        "price_decimals": 4,
+        "inventory_target": 0,
+        "risk_aversion": 0.2,
+        "order_size": 1,
+        "obs_type": venv.env.obs_space,
+        "act_type": venv.env.act_space,
+    }
+
+    expert = expert_policy(env=expert_venv.env, **expert_params)
+    action_func = expert.get_action_func()
+    obs_model = venv.reset()
+    obs_expert = expert_venv.reset()
+    done = False
+    n_steps = 0
+    while not done:
+        action_model = model.predict(obs_model, deterministic=True)[0]
+        action_expert = action_func(obs_expert)
+
+        obs_model, _, done, _ = venv.step(action_model)
+        obs_expert, _, done, _ = expert_venv.step(action_expert)
+
+        n_steps += 1
+        # print(f"model obs: {obs_model} act: {action_model}")
+        # print(f"model inv: {venv.env.inventory_qty}")
+        # print(f"expert inv: {expert_venv.env.inventory_qty}")
+
+    print(f"Model: {venv.env.get_metrics()}")
+    print(f"Expert: {expert_venv.env.get_metrics()}")
+
+
+def test_specific_model():
+    dates = "2021_12_31"
+    data = get_data_by_dates(dates)
+    reward = InventoryIntegralPenalty
+
+    venv = setup_venv(
+        data=data,
+        act_space=ActionSpace.NormalizedAction,
+        reward_class=AssymetricPnLDampening,
+        inv_envs=1,
+        time_envs=1,
+        env_params={"inv_jump": 0.18, "data_portion": 0.5},
+    )
+    start_date = datetime.strptime("2021_12_31", "%Y_%m_%d")
+    duration = 3
+    end_date = start_date + timedelta(days=duration)
+    start_str = start_date.strftime("%Y_%m_%d")
+    end_str = end_date.strftime("%Y_%m_%d")
+    model = load_trained_model(
+        # f"clone_to_{reward.__name__}_{start_str}_to_{end_str}",
+        "cloned_AssymetricPnLDampening_best",
+        venv,
+    )
+    test_trained_vs_manual(venv, model)
+
+
+if __name__ == "__main__":
+    test_specific_model()
+# run_random_initialized_model()
+# run_random_initialized_model_non_vec()
+# run_random_initialized_model_new_model()
+# test_simple_policy()
+# test_simple_policy_vec()
+# run_random_initialized_model_non_vec_no_size()
+# test_imitation_simple_policy()
+# load_random_init_model()
+# test_linear_obs()
+# test_no_size_normalized()
+# test_overlapping()
+# test_cloning_vs_manual()
+
+# test_step_speed()
+# test_inventory_environments()
+# test_trained_model()

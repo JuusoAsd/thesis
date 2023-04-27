@@ -50,6 +50,7 @@ class AssymetricPnLDampening(BaseRewardClass):
         self,
         env,
         liquidation_penalty=10,
+        liquidation_threshold=0.8,
         dampening=3,
         inventory_penalty=0.1,
         add_inventory_penalty=False,
@@ -58,6 +59,7 @@ class AssymetricPnLDampening(BaseRewardClass):
         self.liquidation_penalty = liquidation_penalty
         self.dampening = dampening
         self.inventory_penalty = inventory_penalty
+        self.liquidation_threshold = liquidation_threshold
         self.add_inventory_penalty = add_inventory_penalty
 
     def start_step(self):
@@ -71,7 +73,7 @@ class AssymetricPnLDampening(BaseRewardClass):
         reward = is_profit * (
             profit / (1 + norm_inventory**self.dampening) + (1 - is_profit) * profit
         )
-        is_liquidated = norm_inventory > 1
+        is_liquidated = norm_inventory > self.liquidation_threshold
         reward -= is_liquidated * self.liquidation_penalty
         if self.add_inventory_penalty:
             reward -= norm_inventory * self.inventory_penalty
@@ -98,9 +100,6 @@ class MultistepPnl(BaseRewardClass):
         return last_value - start_value
 
 
-import time
-
-
 class InventoryIntegralPenalty(BaseRewardClass):
     """
     reward function that
@@ -117,6 +116,9 @@ class InventoryIntegralPenalty(BaseRewardClass):
         self.penalty_limit = penalty_limit
         self.over_time_modifier = over_time_modifier
         self.spot_modifier = spot_modifier
+        # check that env has n_envs attribute
+        if not hasattr(self.env, "n_envs"):
+            raise AttributeError("env must have n_envs attribute")
         self.accumulated_inventory = np.array(self.env.n_envs * [0])
 
     def start_step(self):
@@ -165,3 +167,36 @@ class InventoryIntegralPenalty(BaseRewardClass):
         # print()
         # time.sleep(0.5)
         return reward
+
+
+class SimpleInventoryPnlReward(BaseRewardClass):
+    def __init__(self, env):
+        super().__init__(env)
+
+    def start_step(self):
+        self.value_start = self.env._get_value()
+
+    def end_step(self):
+        self.value_end = self.env._get_value()
+        profit = self.value_end - self.value_start
+        inventory = np.abs(self.env.norm_inventory)
+        is_high = inventory > 0.9
+
+        return profit / (1 + inventory) - is_high * 100
+
+
+class SpreadPnlReward(BaseRewardClass):
+    """
+    Reward based on how much PnL earned due to spread
+    """
+
+    def __init__(self, env):
+        super().__init__(env)
+
+    def start_step(self):
+        pass
+
+    def end_step(self):
+        spread = self.env.spread
+        inventory = np.abs(self.env.norm_inventory)
+        return spread / (1 + inventory)

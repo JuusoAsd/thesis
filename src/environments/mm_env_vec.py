@@ -19,32 +19,38 @@ class MMVecEnv(gym.Env):
     def __init__(
         self,
         data,
-        n_envs=1,
+        n_envs=1,  # not used, but needed for compatibility i guess?
+        # env params
         capital=1000,
         price_decimals=4,
         tick_size=0.0001,
         inventory_target=0,
-        reward_class=BaseRewardClass,
-        reward_params={},
-        column_mapping={},
-        params={},
         max_order_size=10,
         max_diff=0.001,
+        reward_class=BaseRewardClass,
+        reward_params={},
         record_values=True,
+        # venv params
         time_envs=1,
         data_portion=0.9,
         inv_envs=1,
         inv_jump=0.25,
+        # other params
+        column_mapping={},  # which columns are what
+        params={},  # contains obs and act spaces
     ):
-        if inv_envs % 2 == 0:
-            logging.warning(f"Using {inv_envs} inv_envs, prefer using odd number")
-        if (inv_envs - 1) * inv_jump >= 1:
-            # TODO: allowed range for norm_inventory is currently [-3,3], this should accomodate
-            raise ValueError(f"inv_jump {inv_jump} too large for {inv_envs} inv_envs")
-
-        self.data_points = len(data) - 1
+        self.capital = capital
+        self.price_decimals = price_decimals
+        self.tick_size = tick_size
+        self.inventory_target = inventory_target
+        self.max_order_size = max_order_size
+        self.max_diff = max_diff
+        self.reward_class_type = reward_class
+        self.reward_params = reward_params
         self.record_values = record_values
-        self.n_envs = time_envs * inv_envs
+        self.column_mapping = column_mapping
+        self.params = params
+
         """
         - time_envs: how many envs with different starting and ending times
             - data_portion: how much of the data is used for each env
@@ -52,18 +58,25 @@ class MMVecEnv(gym.Env):
             - inv_jump: how much the inventory jumps between envs
 
         """
+        if inv_envs % 2 == 0:
+            logging.warning(f"Using {inv_envs} inv_envs, prefer using odd number")
+        if (inv_envs - 1) * inv_jump >= 1:
+            # TODO: allowed range for norm_inventory is currently [-3,3], this should accomodate
+            raise ValueError(f"inv_jump {inv_jump} too large for {inv_envs} inv_envs")
+        self.n_envs = time_envs * inv_envs
+        data_points = len(data) - 1
         if data_portion * time_envs < 1:
             start = np.array(range(time_envs)) * data_portion
             end = start + data_portion
-            start_val = start * self.data_points
-            end_val = end * self.data_points
+            start_val = start * data_points
+            end_val = end * data_points
 
         else:
             offset = (1 - data_portion) / (time_envs - 1)
             start = np.array(range(time_envs)) * offset
             end = start + data_portion
-            start_val = start * self.data_points
-            end_val = end * self.data_points
+            start_val = start * data_points
+            end_val = end * data_points
         start_val = start_val.astype(int)
         end_val = end_val.astype(int)
 
@@ -80,18 +93,11 @@ class MMVecEnv(gym.Env):
         self.start_steps = np.array([i[0][0] for i in env_list])
         self.end_steps = np.array([i[0][1] for i in env_list])
         self.start_inv = np.array([i[1] for i in env_list])
+        # Finished initializing envs
 
-        self.max_diff = max_diff
-        self.capital = capital
-        self.price_decimals = price_decimals
-        self.tick_size = tick_size
-        self.inventory_target = inventory_target
-        self.max_order_size = max_order_size
-        self.reward_class = reward_class(self, **reward_params)
         # to observe the external environment we need best bid and ask and possible trades (price and size), for internal just inventory
         # Everything else depends on the inputs of the policy we are using
         # observations are read from raw data as is but then normalized to be in the given ranges
-
         self.best_ask = None
         self.best_bid = None
         self.low_price = None
@@ -107,6 +113,12 @@ class MMVecEnv(gym.Env):
             self.observation_space = self.obs_space.obs_space
         self.act_space = params["action_space"]
         self.action_space = params["action_space"].value
+
+        # rewards might use other already initialized parameters from the env, set it here
+        self.reward_class = self.reward_class_type(self, **self.reward_params)
+
+        # initialize measured values, can't be done in reset because vecenv are automatically reset
+        # this would zero out the values when reaching end of episode
         self.values = []
         self.inventory = []
         self.trade_market = np.zeros(self.n_envs)
@@ -114,6 +126,21 @@ class MMVecEnv(gym.Env):
 
         self.reset()
         return None
+
+    def get_env_params(self):
+        return {
+            "capital": self.capital,
+            "price_decimals": self.price_decimals,
+            "tick_size": self.tick_size,
+            "inventory_target": self.inventory_target,
+            "max_order_size": self.max_order_size,
+            "max_diff": self.max_diff,
+            "reward_class": self.reward_class_type,
+            "reward_params": self.reward_params,
+            "record_values": self.record_values,
+            "column_mapping": self.column_mapping,
+            "params": self.params,
+        }
 
     def reset(self):
         self.current_step = self.start_steps.copy()
@@ -127,17 +154,20 @@ class MMVecEnv(gym.Env):
         # get current price for each env to get all of them to have same total value
         inventory_value = self.inventory_qty * p
         self.quote = self.capital - inventory_value
-
         # this is updated when calling _get_observation, can initialize at 0
         self.norm_inventory = np.zeros(self.n_envs)
+
         self.bids = np.array(0 * self.n_envs).astype(np.float64)
         self.bid_sizes = np.zeros(self.n_envs)
         self.asks = np.zeros(self.n_envs)
         self.ask_sizes = np.zeros(self.n_envs)
+        self.spread = np.zeros(self.n_envs)
+
         return self._get_observation()
 
     def step(self, action_vec):
         # initialize
+        self.spread = np.zeros(self.n_envs)
         self._apply_action(action_vec)
         self.reward_class.start_step()
 
@@ -161,7 +191,7 @@ class MMVecEnv(gym.Env):
         info = np.repeat({}, self.n_envs)
 
         if self.record_values:
-            self.inventory.append(obs[:, 1])  # VECTORIZE
+            self.inventory.append(obs[:, 0])  # VECTORIZE
 
         for i in range(self.n_envs):
             if is_dones[i]:
@@ -176,7 +206,16 @@ class MMVecEnv(gym.Env):
         )
 
     def _execute_market_orders(self):
+        # when doing market orders, we likely lose money from spread
+        # buying happens above mid price, selling below mid price
+
         execute_buy = self.bids >= self.best_ask[self.current_step]
+        buy_spread = (
+            (self.bids - self.mid_price[self.current_step])
+            * self.bid_sizes
+            * execute_buy
+        )
+
         self.inventory_qty += self.bid_sizes * execute_buy
         logging.debug(f"execute market buy {execute_buy}")
 
@@ -185,6 +224,11 @@ class MMVecEnv(gym.Env):
         self.bid_sizes = self.bid_sizes * (1 - execute_buy)
 
         execute_sell = self.asks <= self.best_bid[self.current_step]
+        sell_spread = (
+            (self.mid_price[self.current_step] - self.asks)
+            * self.ask_sizes
+            * execute_sell
+        )
         logging.debug(f"execute market sell {execute_sell}")
         self.inventory_qty -= self.ask_sizes * execute_sell
         self.quote += self.asks * self.ask_sizes * execute_sell
@@ -192,8 +236,15 @@ class MMVecEnv(gym.Env):
         self.ask_sizes = self.ask_sizes * (1 - execute_sell)
         self.trade_market += execute_buy + execute_sell
 
+        self.spread -= sell_spread + buy_spread
+
     def _execute_limit_orders(self):
         execute_buy = self.bids >= self.low_price[self.current_step]
+        buy_spread = (
+            (self.mid_price[self.current_step] - self.bids)
+            * execute_buy
+            * self.bid_sizes
+        )
         logging.debug(f"execute limit buy {execute_buy}")
         self.inventory_qty += self.bid_sizes * execute_buy
         self.quote -= self.bids * self.bid_sizes * execute_buy
@@ -201,12 +252,18 @@ class MMVecEnv(gym.Env):
         self.bid_sizes = self.bid_sizes * (1 - execute_buy)
 
         execute_sell = self.asks <= self.high_price[self.current_step]
+        sell_spread = (
+            (self.asks - self.mid_price[self.current_step])
+            * execute_sell
+            * self.ask_sizes
+        )
         logging.debug(f"execute limit sell {execute_sell}")
         self.inventory_qty -= self.ask_sizes * execute_sell
         self.quote += self.asks * self.ask_sizes * execute_sell
         self.asks = self.asks * (1 - execute_sell)
         self.ask_sizes = self.ask_sizes * (1 - execute_sell)
         self.trade_limit += execute_buy + execute_sell
+        self.spread += sell_spread + buy_spread
 
     def _get_observation(self):
         # normalize inventory
@@ -308,7 +365,18 @@ class MMVecEnv(gym.Env):
             raise NotImplementedError(
                 f"Conversion not implemented for action_space: {self.act_space}"
             )
-        self.bid_sizes, self.ask_sizes, self.bids, self.asks = formated_action
+
+        bid_size, ask_size, bid, ask = formated_action
+        # make sure both bid and ask size are at least 1
+        bid_size = np.maximum(bid_size, 1)
+        ask_size = np.maximum(ask_size, 1)
+
+        self.bid_sizes, self.ask_sizes, self.bids, self.asks = (
+            bid_size,
+            ask_size,
+            bid,
+            ask,
+        )
 
     def _get_value(self):
         return self.quote + self.inventory_qty * self.mid_price[self.current_step]
@@ -329,7 +397,12 @@ class MMVecEnv(gym.Env):
             "drawdown": drawdown,
             "trades": trades,
             "max_inventory": max_inventory,
+            "mean_absolute_inventory": np.mean(np.abs(self.inventory), axis=0),
         }
+        return values
+
+    def get_metrics_str(self):
+        values = self.get_metrics()
         str_rep = ""
         for k, v in values.items():
             if isinstance(v, np.ndarray):
@@ -345,6 +418,13 @@ class MMVecEnv(gym.Env):
         pd.DataFrame(data_dict).to_csv(
             os.path.join(os.getenv("RESULT_PATH"), f"{path}.csv"), index=False
         )
+
+    def reset_metrics(self):
+        # if reset
+        self.values = []
+        self.inventory = []
+        self.trade_market = np.zeros(self.n_envs)
+        self.trade_limit = np.zeros(self.n_envs)
 
 
 from stable_baselines3.common.vec_env import VecEnv
@@ -399,3 +479,24 @@ class SBMMVecEnv(VecEnv):
 
     def seed(self, seed=None):
         self.env.seed(seed)
+
+    def clone_venv(
+        self,
+        data,
+        time_envs=1,
+        inv_envs=1,
+        data_portion=0.9,
+        inv_jump=0.25,
+    ):
+        """
+        Returns the same environment that is completely detached from the current one.
+        """
+        env_clone = MMVecEnv(
+            data=data,
+            time_envs=time_envs,
+            inv_envs=inv_envs,
+            data_portion=data_portion,
+            inv_jump=inv_jump,
+            **self.env.get_env_params(),
+        )
+        return SBMMVecEnv(env_clone)

@@ -247,7 +247,7 @@ fn main() {
         Ok(_) => println!("Loaded .env file"),
         Err(e) => println!("Error loading .env file: {}", e),
     }
-    let file_count = 6;
+    let file_count = 26;
     parse_interim_data(file_count);
     parse_data_time_aggregation(file_count);
 }

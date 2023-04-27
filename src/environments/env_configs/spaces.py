@@ -9,7 +9,7 @@ def get_space(space_dict):
         low=np.array([space_dict[key][0] for key in space_dict.keys()]),
         high=np.array([space_dict[key][1] for key in space_dict.keys()]),
         shape=(len(space_dict.keys()),),
-        dtype=np.float32,
+        dtype=np.float64,
     )
 
 
