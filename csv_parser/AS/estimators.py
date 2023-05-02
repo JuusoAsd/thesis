@@ -190,21 +190,42 @@ class OSIEstimator(EstimatorABC):
         self.trade_bids/asks are two dimensional arrays formed like this [[timestamp, size]]
         This function sorts the trades by size and takes the 90% quantile sized trades for OSI calculation.
         """
-        buy_qty, sell_qty = np.array(self.buys)[:, 1], np.array(self.sells)[:, 1]
-        decile_buys = buy_qty[(buy_qty > np.percentile(buy_qty, 90))].sum()
-        decile_sells = sell_qty[(sell_qty < np.percentile(sell_qty, 90))].sum()
 
-        osi = 100 * ((decile_buys - decile_sells) / (decile_buys + decile_sells))
-        self.osi = osi
+        if self.buys and self.sells == []:
+            self.osi = 0
+
+        elif self.buys == []:
+            self.osi = -100
+
+        elif self.sells == []:
+            self.osi = 100
+
+        else:
+            try:
+                buy_qty, sell_qty = (
+                    np.array(self.buys)[:, 1],
+                    np.array(self.sells)[:, 1],
+                )
+            except Exception as e:
+                print(self.buys)
+                print(self.sells)
+                raise e
+            decile_buys = buy_qty[(buy_qty > np.percentile(buy_qty, 90))].sum()
+            decile_sells = sell_qty[(sell_qty < np.percentile(sell_qty, 90))].sum()
+
+            osi = 100 * ((decile_buys - decile_sells) / (decile_buys + decile_sells))
+            self.osi = osi
 
     def get_value(self, ts):
         if ts >= self.previous_update + self.update_interval:
             # prune trades that are too old
-            buy_arr = np.array(self.buys)
-            self.buys = buy_arr[buy_arr[:, 0] > (ts - self.lookback)].tolist()
+            if self.buys != []:
+                buy_arr = np.array(self.buys)
+                self.buys = buy_arr[buy_arr[:, 0] > (ts - self.lookback)].tolist()
 
-            sell_arr = np.array(self.sells)
-            self.sells = sell_arr[sell_arr[:, 0] > (ts - self.lookback)].tolist()
+            if self.sells != []:
+                sell_arr = np.array(self.sells)
+                self.sells = sell_arr[sell_arr[:, 0] > (ts - self.lookback)].tolist()
 
             self.calculate_values()
             self.previous_update = ts
