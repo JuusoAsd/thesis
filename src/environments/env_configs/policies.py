@@ -47,8 +47,6 @@ class ASPolicyVec:
         risk_aversion,
         order_size,
         max_diff=0.001,
-        obs_type=ObservationSpace.OSIObservation,
-        act_type=ActionSpace.NormalizedAction,
     ):
         self.env = env
         self.max_order_size = max_order_size
@@ -59,8 +57,8 @@ class ASPolicyVec:
         self.inventory_target = inventory_target
         self.risk_aversion = risk_aversion
         self.order_size = np.full(self.env.n_envs, order_size)
-        self.obs_type = obs_type
-        self.act_type = act_type
+        self.obs_type = env.obs_space
+        self.act_type = env.act_space
 
     def get_continuous_action(self, observation):
         """

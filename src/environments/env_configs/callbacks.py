@@ -9,28 +9,42 @@ import numpy as np
 class ExternalMeasureCallback(BaseCallback):
     """
     Custom callback used in the training loop to measure the performance of the agent using financial metrics
-    Used to determine if training should be stopped early as agent is not improving
+    Used to determine if training should be stopped early when agent is not improving
+    Can handle validation in multiple paths, (time, inventory, or both)
+        - the reward is then measured as average of the metrics over all paths
     """
 
     def __init__(
         self,
         data,
         venv,
-        model_name,
+        model_name="",
         patience=6,
         wait=15,
         freq=10,
         improvement_thresh=0.1,
         initial_expert=False,
         save_best_model=False,
+        time_envs=1,
+        inv_envs=1,
+        time_data_portion=0.5,
+        inv_jump=0.18,
         verbose: int = 0,
     ):
         super(ExternalMeasureCallback, self).__init__(verbose)
         self.data = data
         # create a copy of the venv
-        self.venv = venv.clone_venv(self.data, time_envs=1, inv_envs=1)
+        self.venv = venv.clone_venv(
+            self.data,
+            time_envs=time_envs,
+            inv_envs=inv_envs,
+            inv_jump=inv_jump,
+            data_portion=time_data_portion,
+        )
         self.model_name = model_name
         self.save_model = save_best_model
+        if self.save_model:
+            assert self.model_name != "", "Model name must be provided when saving"
         self.init_patience = patience
         self.patience = patience
         self.wait = wait * freq
@@ -113,7 +127,7 @@ class ExternalMeasureCallback(BaseCallback):
                 while True:
                     act = self.locals["self"].predict(obs, deterministic=True)[0]
                     obs, _, done, _ = self.venv.step(act)
-                    if done:
+                    if np.any(done):
                         break
 
                 performance_metrics = self.venv.env.get_metrics()
@@ -125,7 +139,9 @@ class ExternalMeasureCallback(BaseCallback):
                 if agent_reward > self.best_reward * (1 + self.improvement_thresh):
                     self.patience = self.init_patience
                     self.best_reward = agent_reward
-                    self.best_performance_metrics = performance_metrics
+                    self.best_performance_metrics = {
+                        k: np.mean(v) for k, v in performance_metrics.items()
+                    }
                     if self.save_model:
                         save_trained_model(self.locals["self"], self.model_name)
                 else:
@@ -133,8 +149,11 @@ class ExternalMeasureCallback(BaseCallback):
                     if self.patience <= 0:
                         self.continue_training = False
                         print(f"stopping training after {self.eval_count} evals")
+                mean_performance_metrics = {
+                    k: np.mean(v) for k, v in performance_metrics.items()
+                }
                 print(
-                    f"Evals: {self.eval_count}, patience: {self.patience} agent reward: {agent_reward}, best reward: {self.best_reward}, {performance_metrics}"
+                    f"Evals: {self.eval_count}, patience: {self.patience} agent reward: {agent_reward}, best reward: {self.best_reward}, {mean_performance_metrics}"
                 )
 
         return True
@@ -146,9 +165,13 @@ class ExternalMeasureCallback(BaseCallback):
         return True
 
     def get_performance(self, metrics):
-        if metrics["max_inventory"] > 0.99:
-            return 0
-        return metrics["return"] / metrics["mean_absolute_inventory"]
+        is_liquidated = np.max(metrics["max_inventory"]) > 0.99
+        return np.mean(
+            (
+                metrics["return"] / metrics["mean_abs_inv"] * (1 - is_liquidated)
+                + is_liquidated * 0
+            )
+        )
 
 
 class GroupRewardCallback(tune.Callback):

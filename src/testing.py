@@ -1,45 +1,24 @@
 import os
 import logging
+import copy
+from datetime import datetime, timedelta
+import csv
+import random
+
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 import gym
-
 from stable_baselines3 import PPO, A2C
-import copy
+
 
 from environments.env_configs.spaces import ActionSpace, ObservationSpace
 from environments.env_configs.policies import ASPolicyVec
 from environments.mm_env_vec import MMVecEnv, SBMMVecEnv
-from datetime import datetime, timedelta
 from environments.env_configs.rewards import *
+
 
 load_dotenv()
-
-print(f"reading data from: {os.getenv('BASE_PATH')}")
-base = pd.read_csv(os.getenv("BASE_PATH"))
-indicators = pd.read_csv(os.getenv("INDICATOR_PATH"))
-data = pd.merge(base, indicators, on="timestamp", how="left").ffill().dropna()
-data["mid_price"] = np.round((data.best_bid + data.best_ask) / 2, 5)
-column_mapping = {col: n for (n, col) in enumerate(data.columns)}
-
-import os
-import tempfile
-import numpy as np
-import pandas as pd
-from dotenv import load_dotenv
-import torch as th
-from stable_baselines3.common.vec_env import VecNormalize
-
-from environments.env_configs.spaces import ActionSpace, ObservationSpace
-from environments.env_configs.policies import (
-    ASPolicyVec,
-)
-from environments.mm_env_vec import MMVecEnv, SBMMVecEnv
-from environments.env_configs.util import ExponentialBetaSchedule, BCEvalCallback
-from environments.env_configs.rewards import *
-import environments.env_configs.policies as policies
-import random
 
 
 def run_random_initialized_model():
@@ -205,10 +184,9 @@ def run_random_initialized_model_non_vec_no_size():
         print(f"Random init non-vec model action sampled: {action[0]}")
 
 
-from cloning import save_trained_model, load_trained_model
-
-
 def load_random_init_model():
+    from cloning import save_trained_model, load_trained_model
+
     # Check if only a model that has been loaded from a file produces the constant output
     obs_space = ObservationSpace.SimpleObservation
     act_space = ActionSpace.NormalizedAction
@@ -504,13 +482,12 @@ def test_overlapping():
             break
 
 
-from environments.util import setup_venv
-from data_management import get_data_by_dates
-from cloning import load_trained_model
-import time
-
-
 def test_step_speed():
+    from environments.util import setup_venv
+    from data_management import get_data_by_dates
+    from cloning import load_trained_model
+    import time
+
     data = get_data_by_dates("2021-12-23")
     venv = setup_venv(data=data, n_env=8)
     model = load_trained_model("clone_bc", venv)
@@ -552,6 +529,10 @@ def test_step_speed():
 
 
 def test_cloning_vs_manual():
+    from environments.util import setup_venv
+    from data_management import get_data_by_dates
+    from cloning import load_trained_model
+
     data = get_data_by_dates("2021_12_23")
     venv = setup_venv(
         data=data,
@@ -660,7 +641,7 @@ def test_trained_model(venv, model):
     print(f"Metrics: {venv.env.get_metrics()}")
 
 
-def test_trained_vs_manual(venv, model):
+def test_trained_vs_manual(venv, model, save_values=False, result_file="", date=""):
     expert_venv = copy.deepcopy(venv)
     expert_policy = ASPolicyVec
     expert_params = {
@@ -671,8 +652,6 @@ def test_trained_vs_manual(venv, model):
         "inventory_target": 0,
         "risk_aversion": 0.2,
         "order_size": 1,
-        "obs_type": venv.env.obs_space,
-        "act_type": venv.env.act_space,
     }
 
     expert = expert_policy(env=expert_venv.env, **expert_params)
@@ -693,14 +672,41 @@ def test_trained_vs_manual(venv, model):
         # print(f"model inv: {venv.env.inventory_qty}")
         # print(f"expert inv: {expert_venv.env.inventory_qty}")
 
-    print(f"Model: {venv.env.get_metrics()}")
-    print(f"Expert: {expert_venv.env.get_metrics()}")
+    metrics = venv.env.get_metrics()
+    if metrics["max_inventory"] == 0:
+        logging.error("Zero inventory run")
+        return
+
+    model_metrics = venv.env.get_metrics_val()
+    expert_metrics = expert_venv.env.get_metrics_val()
+    print(f"Model: {model_metrics}")
+    print(f"Expert: {expert_metrics} \n")
+    if save_values:
+        if date == "":
+            raise ValueError("Date must be specified when saving")
+        date_str = date.strftime("%Y_%m_%d")
+        model_metrics["date"] = date_str
+        expert_metrics["date"] = date_str
+        model_metrics["result_type"] = "model"
+        expert_metrics["result_type"] = "expert"
+        path = os.path.join(os.getenv("RESULT_PATH"), f"{result_file}.csv")
+        with open(path, "a+") as f:
+            w = csv.DictWriter(f, model_metrics.keys())
+            w.writerow(model_metrics)
+            w.writerow(expert_metrics)
+
+    return (model_metrics, expert_metrics)
+
+
+# def save_full_run(venv, model, file_name):
 
 
 def test_specific_model():
-    dates = "2021_12_31"
+    config = get_config("rolling_train_test")
+
+    dates = "2022_01_11"
     data = get_data_by_dates(dates)
-    reward = InventoryIntegralPenalty
+    reward = AssymetricPnLDampening
 
     venv = setup_venv(
         data=data,
@@ -713,31 +719,64 @@ def test_specific_model():
     start_date = datetime.strptime("2021_12_31", "%Y_%m_%d")
     duration = 3
     end_date = start_date + timedelta(days=duration)
-    start_str = start_date.strftime("%Y_%m_%d")
-    end_str = end_date.strftime("%Y_%m_%d")
     model = load_trained_model(
-        # f"clone_to_{reward.__name__}_{start_str}_to_{end_str}",
-        "cloned_AssymetricPnLDampening_best",
+        f"cloned_{reward.__name__}_train_eval",
         venv,
+        model_kwargs=config.model_params,
     )
+
     test_trained_vs_manual(venv, model)
 
 
-if __name__ == "__main__":
-    test_specific_model()
-# run_random_initialized_model()
-# run_random_initialized_model_non_vec()
-# run_random_initialized_model_new_model()
-# test_simple_policy()
-# test_simple_policy_vec()
-# run_random_initialized_model_non_vec_no_size()
-# test_imitation_simple_policy()
-# load_random_init_model()
-# test_linear_obs()
-# test_no_size_normalized()
-# test_overlapping()
-# test_cloning_vs_manual()
+# from environments.env_configs.callbacks import ExternalMeasureCallback
 
-# test_step_speed()
-# test_inventory_environments()
-# test_trained_model()
+
+def test_callback():
+    dates = "2021_12_30"
+    data = get_data_by_dates(dates)
+    reward = InventoryIntegralPenalty
+
+    venv = setup_venv(
+        data=data,
+        act_space=ActionSpace.NormalizedAction,
+        reward_class=InventoryIntegralPenalty,
+        inv_envs=1,
+        time_envs=1,
+        env_params={"inv_jump": 0.18, "data_portion": 0.5},
+    )
+    model = load_trained_model(
+        # f"clone_to_{reward.__name__}_{start_str}_to_{end_str}",
+        # "cloned_AssymetricPnLDampening_best",
+        "clone_bc",
+        venv,
+    )
+    callback = ExternalMeasureCallback(
+        data=data.to_numpy(), venv=venv, wait=0, freq=1, time_envs=2
+    )
+    model.learn(total_timesteps=3000, callback=callback)
+    print(
+        f"metrics: {callback.best_performance_metrics} \n best: {callback.best_reward}"
+    )
+
+
+if __name__ == "__main__":
+    # test_specific_model()
+    # run_random_initialized_model()
+    # run_random_initialized_model_non_vec()
+    # run_random_initialized_model_new_model()
+    # test_simple_policy()
+    # test_simple_policy_vec()
+    # run_random_initialized_model_non_vec_no_size()
+    # test_imitation_simple_policy()
+    # load_random_init_model()
+    # test_linear_obs()
+    # test_no_size_normalized()
+    # test_overlapping()
+    # test_cloning_vs_manual()
+
+    # test_step_speed()
+    # test_inventory_environments()
+    # test_trained_model()
+    # test_specific_model()
+    # test_callback()
+    test_specific_model()

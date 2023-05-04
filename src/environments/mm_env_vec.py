@@ -30,15 +30,18 @@ class MMVecEnv(gym.Env):
         reward_class=BaseRewardClass,
         reward_params={},
         record_values=True,
-        # venv params
+        action_space=ActionSpace.NormalizedAction,
+        observation_space=LinearObservation,
+        # vectorized env params
         time_envs=1,
         data_portion=0.9,
         inv_envs=1,
         inv_jump=0.25,
         # other params
         column_mapping={},  # which columns are what
-        params={},  # contains obs and act spaces
+        **kwargs,
     ):
+        self.data = data
         self.capital = capital
         self.price_decimals = price_decimals
         self.tick_size = tick_size
@@ -49,7 +52,6 @@ class MMVecEnv(gym.Env):
         self.reward_params = reward_params
         self.record_values = record_values
         self.column_mapping = column_mapping
-        self.params = params
 
         """
         - time_envs: how many envs with different starting and ending times
@@ -106,13 +108,13 @@ class MMVecEnv(gym.Env):
         for k, v in column_mapping.items():
             setattr(self, k, data[:, v])
 
-        self.obs_space = params["observation_space"]
+        self.obs_space = observation_space
         if type(self.obs_space) == ObservationSpace:
-            self.observation_space = params["observation_space"].value
+            self.observation_space = self.obs_space.value
         elif type(self.obs_space) == LinearObservation:
             self.observation_space = self.obs_space.obs_space
-        self.act_space = params["action_space"]
-        self.action_space = params["action_space"].value
+        self.act_space = action_space
+        self.action_space = self.act_space.value
 
         # rewards might use other already initialized parameters from the env, set it here
         self.reward_class = self.reward_class_type(self, **self.reward_params)
@@ -139,7 +141,8 @@ class MMVecEnv(gym.Env):
             "reward_params": self.reward_params,
             "record_values": self.record_values,
             "column_mapping": self.column_mapping,
-            "params": self.params,
+            "action_space": self.act_space,
+            "observation_space": self.obs_space,
         }
 
     def reset(self):
@@ -384,7 +387,9 @@ class MMVecEnv(gym.Env):
     def get_metrics(self):
         assert self.record_values, "Must set record_values to True to get metrics"
         total_return = self.values[-1] / self.values[0] - 1  # VECTORIZE
-        drawdown = (self.values / np.maximum.accumulate(self.values) - 1).min()
+        drawdown = (self.values / np.maximum.accumulate(self.values, axis=0) - 1).min(
+            axis=0
+        )
         volatility = np.std(np.diff(np.array(self.values)[:, 0]))  # VECTORIZE
 
         sharpe = total_return / volatility
@@ -397,9 +402,20 @@ class MMVecEnv(gym.Env):
             "drawdown": drawdown,
             "trades": trades,
             "max_inventory": max_inventory,
-            "mean_absolute_inventory": np.mean(np.abs(self.inventory), axis=0),
+            "mean_abs_inv": np.mean(np.abs(self.inventory), axis=0),
         }
         return values
+
+    def get_metrics_val(self):
+        if self.n_envs != 1:
+            raise NotImplementedError(
+                " 'get_metrics_val' Only implemented for n_envs = 1"
+            )
+        metrics = self.get_metrics()
+        for k, v in metrics.items():
+            if isinstance(v, np.ndarray):
+                metrics[k] = v[0]
+        return metrics
 
     def get_metrics_str(self):
         values = self.get_metrics()
@@ -431,7 +447,7 @@ from stable_baselines3.common.vec_env import VecEnv
 
 
 class SBMMVecEnv(VecEnv):
-    def __init__(self, env):
+    def __init__(self, env, **kwargs):
         self.env = env
         self.reset_envs = True
         self.actions: np.ndarray = self.env.action_space.sample()
@@ -482,7 +498,7 @@ class SBMMVecEnv(VecEnv):
 
     def clone_venv(
         self,
-        data,
+        data=None,
         time_envs=1,
         inv_envs=1,
         data_portion=0.9,
@@ -491,6 +507,8 @@ class SBMMVecEnv(VecEnv):
         """
         Returns the same environment that is completely detached from the current one.
         """
+        if data is None:
+            data = self.env.data.copy()
         env_clone = MMVecEnv(
             data=data,
             time_envs=time_envs,

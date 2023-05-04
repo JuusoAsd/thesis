@@ -37,6 +37,8 @@ from util import set_seeds, get_config
 os.environ["TUNE_DISABLE_STRICT_METRIC_CHECKING"] = "1"
 common_config = get_config("test_yaml")
 
+from ray.tune.schedulers import AsyncHyperBandScheduler
+
 
 def objective(
     config,
@@ -103,6 +105,7 @@ def main_tuning_func():
         metric=common_config.reporter.sort_metric,
         mode="max",
         max_report_frequency=common_config.reporter.report_frequency,
+        max_progress_rows=common_config.reporter.max_progress_rows,
     )
     search_algo = HyperOptSearch(
         points_to_evaluate=[common_config.initial_values],
@@ -180,13 +183,11 @@ def test_search_space():
     for k, v in search_space.items():
         val_dict = {}
         val = v[1]
-        # print(k)
         other_objs = get_other_objs(k, search_space)
         if hasattr(val, "__iter__"):
             for i in val:
                 val_dict[k] = i
                 val_dict.update(other_objs.copy())
-                # print(val_dict)
         else:
             val_dict[k] = val
             val_dict.update(other_objs.copy())
@@ -204,6 +205,12 @@ def test_search_space():
             pass
 
 
+def cont_tuning():
+    tuner = tune.Tuner.restore("/Volumes/ssd/gradu_data/tune_multiple_val_envs")
+    tuner.fit()
+
+
 if __name__ == "__main__":
     # test_search_space()
     main_tuning_func()
+    # cont_tuning()

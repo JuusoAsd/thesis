@@ -9,7 +9,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def get_data_by_dates(start_date: Union[datetime, str], end_date=None, days=None):
+def get_data_by_dates(
+    start_date: Union[datetime, str], end_date=None, days=None, **kwargs
+):
     """
     Returns a single dataframe with all the data from the start date to the end date / for duration in days.
     """

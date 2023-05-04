@@ -15,6 +15,8 @@ from environments.env_configs.rewards import (
     SpreadPnlReward,
 )
 from environments.env_configs.callbacks import ExternalMeasureCallback
+from util import set_seeds, get_config
+import numpy as np
 
 
 def train_model():
@@ -199,9 +201,10 @@ def train_from_model(venv, model, callback, steps=1_000_000):
 
 
 def test_init_rolling_train_early_stop():
+    config = get_config("rolling_train_test")
     # start with cloned model, train for n days, do rolling training with early stopping
-    start_date = datetime.strptime("2021_12_24", "%Y_%m_%d")
-    duration = 7
+    start_date = datetime.strptime(config.start_date, "%Y_%m_%d")
+    duration = config.initial_train_duration
     end_date = start_date + timedelta(days=duration)
     data = get_data_by_dates(start_date, end_date)
     reward = AssymetricPnLDampening
@@ -218,16 +221,19 @@ def test_init_rolling_train_early_stop():
             "reward_params": reward_params,
         },
     )
+    callback_start = datetime.strptime(config.start_date_callback, "%Y_%m_%d")
+    callback_end = callback_start + timedelta(days=config.callback_duration)
+    callback_data = get_data_by_dates(callback_start, callback_end).to_numpy()
     init_callback = ExternalMeasureCallback(
-        data=get_data_by_dates(start_date - timedelta(days=1)).to_numpy(),
+        data=callback_data,
         venv=venv,
-        model_name=f"cloned_{reward.__name__}_init",
-        wait=2,
-        freq=5,
-        patience=5,
         verbose=1,
+        model_name=f"cloned_{reward.__name__}_init",
+        save_best_model=True,
+        **config.callback_params.init,
     )
-    train_from_model(venv, "clone_bc", init_callback, steps=10_000_000)
+    model = load_trained_model("clone_bc", venv, model_kwargs=config.model_params)
+    # model.learn(total_timesteps=10_000_000, callback=init_callback, log_interval=None)
 
     # based on the callback result load best model
     current_date = end_date + timedelta(days=1)
@@ -235,7 +241,13 @@ def test_init_rolling_train_early_stop():
     eval_model = load_trained_model(f"cloned_{reward.__name__}_init", eval_venv)
 
     # compare performance of eval model vs manual
-    test_trained_vs_manual(eval_venv, eval_model)
+    test_trained_vs_manual(
+        eval_venv,
+        eval_model,
+        save_values=True,
+        result_file="rolling_test",
+        date=current_date,
+    )
 
     train_venv = eval_venv
     # for next 5 days, do rolling training with early stopping
@@ -247,43 +259,59 @@ def test_init_rolling_train_early_stop():
         inv_jump=0.18,
         data_portion=0.5,
     )
-    train_model = load_trained_model(f"cloned_{reward.__name__}_init", train_venv)
+    train_model = load_trained_model(
+        f"cloned_{reward.__name__}_init", train_venv, model_kwargs=config.model_params
+    )
     start = True
-    for i in range(5):
+    while current_date < datetime.strptime(config.rolling_end_date, "%Y_%m_%d"):
         print(f"Training on {current_date}")
+        current_data = get_data_by_dates(current_date)
+        if abs((current_data.best_bid - current_data.best_ask).mean()) > 0.01:
+            print(f"Skipping {current_date}")
+            current_date += timedelta(days=1)
+            continue
         if not start:
             train_venv = eval_venv.clone_venv(
-                data=get_data_by_dates(current_date).to_numpy(),
+                data=current_data.to_numpy(),
                 time_envs=4,
                 inv_envs=5,
                 inv_jump=0.18,
                 data_portion=0.5,
             )
             train_model = load_trained_model(
-                f"cloned_{reward.__name__}_train_eval", train_venv
+                f"cloned_{reward.__name__}_train_eval",
+                train_venv,
+                model_kwargs=config.model_params,
             )
 
         # evaluate also on same date
         train_eval = ExternalMeasureCallback(
-            data=get_data_by_dates(current_date).to_numpy(),
+            data=current_data.to_numpy(),
             venv=train_venv,
-            model_name=f"cloned_{reward.__name__}_train_eval",
-            wait=2,
-            freq=2,
-            patience=3,
             verbose=1,
+            model_name=f"cloned_{reward.__name__}_train_eval",
+            save_best_model=True,
+            **config.callback_params.init,
         )
         train_model.learn(
-            total_timesteps=3_000_000, callback=train_eval, log_interval=None
+            total_timesteps=10_000_000, callback=train_eval, log_interval=None
         )
 
         # evaluate on next day
         current_date += timedelta(days=1)
         eval_venv = venv.clone_venv(data=get_data_by_dates(current_date).to_numpy())
         eval_model = load_trained_model(
-            f"cloned_{reward.__name__}_train_eval", eval_venv
+            f"cloned_{reward.__name__}_train_eval",
+            eval_venv,
+            model_kwargs=config.model_params,
         )
-        test_trained_vs_manual(eval_venv, eval_model)
+        test_trained_vs_manual(
+            eval_venv,
+            eval_model,
+            save_values=True,
+            result_file="rolling_test",
+            date=current_date,
+        )
         start = False
 
 

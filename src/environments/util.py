@@ -1,4 +1,5 @@
 import logging
+
 from stable_baselines3.common.vec_env import VecNormalize
 from environments.mm_env_vec import MMVecEnv, SBMMVecEnv
 from environments.env_configs.rewards import *
@@ -12,6 +13,8 @@ from ray.tune.search import Searcher
 
 logger = logging.getLogger(__name__)
 from typing import Dict, List, Optional
+from data_management import get_data_by_dates
+from environments.env_configs.rewards import reward_dict
 
 
 def setup_venv(
@@ -45,39 +48,27 @@ def setup_venv(
     return venv
 
 
-# class TrialRepeater(Repeater):
-#     def __init__(self, searcher: Searcher, repeat: int = 1, set_index: bool = True):
-#         super().__init__(searcher, repeat, set_index)
+def setup_venv_config(data_config, env_config, venv_config):
+    logging.info(f"setting up venv")
+    data = get_data_by_dates(**data_config)
+    column_mapping = {col: n for (n, col) in enumerate(data.columns)}
+    action = ActionSpace[env_config.spaces.action_space]
+    if env_config.spaces.observation_space.type == "linear":
+        obs = LinearObservation(
+            LinearObservationSpaces[env_config.spaces.observation_space.params]
+        )
+    else:
+        raise NotImplementedError
 
-#     def on_trial_complete(self, trial_id: str, result: Optional[Dict] = None, **kwargs):
-#         """Stores the score for and keeps track of a completed trial.
+    reward = reward_dict[env_config.reward]
 
-#         Stores the metric of a trial as nan if any of the following conditions
-#         are met:
-
-#         1. ``result`` is empty or not provided.
-#         2. ``result`` is provided but no metric was provided.
-
-#         """
-#         if trial_id not in self._trial_id_to_group:
-#             logger.error(
-#                 "Trial {} not in group; cannot report score. "
-#                 "Seen trials: {}".format(trial_id, list(self._trial_id_to_group))
-#             )
-#         trial_group = self._trial_id_to_group[trial_id]
-#         if not result or self.searcher.metric not in result:
-#             score = np.nan
-#         else:
-#             score = result[self.searcher.metric]
-#         trial_group.report(trial_id, score)
-#         if trial_group.finished_reporting():
-#             scores = trial_group.scores()
-#             print(f"Trial {trial_id} finished reporting, scores: {np.nanmean(scores)}")
-#             self.searcher.on_trial_complete(
-#                 trial_group.primary_trial_id,
-#                 result={self.searcher.metric: np.nanmean(scores)},
-#                 **kwargs,
-#             )
-
-#             # for trial_id in trial_group._trials:
-#             #     print(trial_id.values())
+    env = MMVecEnv(
+        data=data.to_numpy(),
+        column_mapping=column_mapping,
+        action_space=action,
+        observation_space=obs,
+        reward_class=reward,
+        **env_config.params,
+    )
+    venv = SBMMVecEnv(env, **venv_config)
+    return venv

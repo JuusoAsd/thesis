@@ -200,3 +200,14 @@ class SpreadPnlReward(BaseRewardClass):
         spread = self.env.spread
         inventory = np.abs(self.env.norm_inventory)
         return spread / (1 + inventory)
+
+
+reward_dict = {
+    "pnl": PnLReward,
+    "inventory": InventoryReward,
+    "spreadpnl": SpreadPnlReward,
+    "multistep_pnl": MultistepPnl,
+    "assymetric_pnl_dampening": AssymetricPnLDampening,
+    "inventory_integral_penalty": InventoryIntegralPenalty,
+    "simple_inventory_pnl_reward": SimpleInventoryPnlReward,
+}

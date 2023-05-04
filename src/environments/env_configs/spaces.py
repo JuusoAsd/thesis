@@ -129,7 +129,11 @@ class LinearObservation:
                 "max_actual": np.full(n_env, v["max_actual"]),
             }
 
-        self.obs_space = spaces.Box(low=np.array(lows), high=np.array(highs))
+        self.obs_space = spaces.Box(
+            low=np.float32(np.array(lows)),
+            high=np.float32(np.array(highs)),
+            dtype=np.float32,
+        )
 
     def convert_to_readable(self, obs_dict={"volatility": 50}):
         # convert from normalized to actual
