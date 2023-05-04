@@ -8,6 +8,13 @@
 - low_price: lowest executed price in the previous 1000ms interval
 - high_price: highest executed price in the previous 1000ms interval
 
+Example:
+- t=0
+    - record best bid and ask prices
+- t=1000
+    - record low price and high price between t=0 and t=1000
+    - calculate the mid price
+
 ### Indicator data
 - intensity:
 - vol

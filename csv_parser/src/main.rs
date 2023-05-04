@@ -3,6 +3,7 @@ use std::path::PathBuf;
 mod file_util;
 mod orderbook_util;
 mod parse_util;
+use csv::WriterBuilder;
 use dotenvy;
 use file_util::{
     get_csv_files_key, get_csv_files_sorted, get_first_snapshot_file, get_first_timestamp,
@@ -306,14 +307,18 @@ fn parse_data(redo: bool, interim: bool, base: bool) {
         .append(append)
         .open(target_base.clone())
         .unwrap();
-    let mut base_wtr = csv::Writer::from_writer(base_file);
+    let mut base_wtr = WriterBuilder::new()
+        .has_headers(redo)
+        .from_writer(base_file);
 
     let mut interim_file = OpenOptions::new()
         .write(true)
         .append(append)
         .open(target_interim)
         .unwrap();
-    let mut interim_wtr = csv::Writer::from_writer(interim_file);
+    let mut interim_wtr = WriterBuilder::new()
+        .has_headers(redo)
+        .from_writer(interim_file);
 
     if redo {
         // we are redoing so start from the first order book snapshot
@@ -383,8 +388,8 @@ fn parse_data(redo: bool, interim: bool, base: bool) {
         first_ts,
         i64::MAX,
         1000,
-        base_wtr,
         interim_wtr,
+        base_wtr,
         update_handler,
         trade_handler,
         order_book,
