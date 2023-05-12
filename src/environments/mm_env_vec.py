@@ -5,14 +5,13 @@ import logging
 import pandas as pd
 import numpy as np
 import gym
-from environments.env_configs.rewards import BaseRewardClass
-import environments.env_configs.policies as policies
-from environments.env_configs.spaces import (
+from src.environments.env_configs.rewards import BaseRewardClass
+import src.environments.env_configs.policies as policies
+from src.environments.env_configs.spaces import (
     ActionSpace,
     ObservationSpace,
     LinearObservation,
 )
-import random
 
 
 class MMVecEnv(gym.Env):
@@ -26,7 +25,7 @@ class MMVecEnv(gym.Env):
         tick_size=0.0001,
         inventory_target=0,
         max_order_size=10,
-        max_diff=0.001,
+        max_ticks=10,
         reward_class=BaseRewardClass,
         reward_params={},
         record_values=True,
@@ -39,6 +38,7 @@ class MMVecEnv(gym.Env):
         inv_jump=0.25,
         # other params
         column_mapping={},  # which columns are what
+        use_copy_envs=False,
         **kwargs,
     ):
         self.data = data
@@ -47,7 +47,7 @@ class MMVecEnv(gym.Env):
         self.tick_size = tick_size
         self.inventory_target = inventory_target
         self.max_order_size = max_order_size
-        self.max_diff = max_diff
+        self.max_diff = tick_size * max_ticks  # max diff between mid and bid/ask
         self.reward_class_type = reward_class
         self.reward_params = reward_params
         self.record_values = record_values
@@ -60,41 +60,50 @@ class MMVecEnv(gym.Env):
             - inv_jump: how much the inventory jumps between envs
 
         """
-        if inv_envs % 2 == 0:
-            logging.warning(f"Using {inv_envs} inv_envs, prefer using odd number")
-        if (inv_envs - 1) * inv_jump >= 1:
-            # TODO: allowed range for norm_inventory is currently [-3,3], this should accomodate
-            raise ValueError(f"inv_jump {inv_jump} too large for {inv_envs} inv_envs")
-        self.n_envs = time_envs * inv_envs
-        data_points = len(data) - 1
-        if data_portion * time_envs < 1:
-            start = np.array(range(time_envs)) * data_portion
-            end = start + data_portion
-            start_val = start * data_points
-            end_val = end * data_points
+        if not use_copy_envs:
+            # if inv_envs % 2 == 0:
+            #     logging.warning(f"Using {inv_envs} inv_envs, prefer using odd number")
+            if (inv_envs - 1) * inv_jump >= 1:
+                # TODO: allowed range for norm_inventory is currently [-3,3], this should accomodate
+                raise ValueError(
+                    f"inv_jump {inv_jump} too large for {inv_envs} inv_envs"
+                )
+            self.n_envs = time_envs * inv_envs
+            data_points = len(data) - 1
+            if data_portion * time_envs < 1:
+                start = np.array(range(time_envs)) * data_portion
+                end = start + data_portion
+                start_val = start * data_points
+                end_val = end * data_points
 
-        else:
-            offset = (1 - data_portion) / (time_envs - 1)
-            start = np.array(range(time_envs)) * offset
-            end = start + data_portion
-            start_val = start * data_points
-            end_val = end * data_points
-        start_val = start_val.astype(int)
-        end_val = end_val.astype(int)
-
-        inv_envs -= 1
-        inv_envs_list = [0]
-        for i in range(inv_envs):
-            mult = int(i / 2 + 1)
-            if i % 2 == 0:
-                inv_envs_list.append(inv_jump * mult)
             else:
-                inv_envs_list.append(-inv_jump * mult)
+                offset = (1 - data_portion) / (time_envs - 1)
+                start = np.array(range(time_envs)) * offset
+                end = start + data_portion
+                start_val = start * data_points
+                end_val = end * data_points
+            start_val = start_val.astype(int)
+            end_val = end_val.astype(int)
 
-        env_list = list(product(zip(start_val, end_val), inv_envs_list))
-        self.start_steps = np.array([i[0][0] for i in env_list])
-        self.end_steps = np.array([i[0][1] for i in env_list])
-        self.start_inv = np.array([i[1] for i in env_list])
+            inv_envs -= 1
+            inv_envs_list = [0]
+            for i in range(inv_envs):
+                mult = int(i / 2 + 1)
+                if i % 2 == 0:
+                    inv_envs_list.append(inv_jump * mult)
+                else:
+                    inv_envs_list.append(-inv_jump * mult)
+
+            env_list = list(product(zip(start_val, end_val), inv_envs_list))
+            self.start_steps = np.array([i[0][0] for i in env_list])
+            self.end_steps = np.array([i[0][1] for i in env_list])
+            self.start_inv = np.array([i[1] for i in env_list])
+        else:
+            self.n_envs = n_envs
+            self.start_steps = np.zeros(n_envs).astype(int)
+            self.end_steps = np.full(n_envs, len(data) - 1)
+            self.start_inv = np.zeros(n_envs)
+
         # Finished initializing envs
 
         # to observe the external environment we need best bid and ask and possible trades (price and size), for internal just inventory
@@ -105,13 +114,15 @@ class MMVecEnv(gym.Env):
         self.low_price = None
         self.high_price = None
         self.mid_price = None
+        self.attribute_list = []
         for k, v in column_mapping.items():
             setattr(self, k, data[:, v])
+            self.attribute_list.append(k)
 
         self.obs_space = observation_space
-        if type(self.obs_space) == ObservationSpace:
+        if isinstance(self.obs_space, ObservationSpace):
             self.observation_space = self.obs_space.value
-        elif type(self.obs_space) == LinearObservation:
+        elif isinstance(self.obs_space, LinearObservation):
             self.observation_space = self.obs_space.obs_space
         self.act_space = action_space
         self.action_space = self.act_space.value
@@ -122,7 +133,8 @@ class MMVecEnv(gym.Env):
         # initialize measured values, can't be done in reset because vecenv are automatically reset
         # this would zero out the values when reaching end of episode
         self.values = []
-        self.inventory = []
+        self.inventory_values = []
+        self.inventory_qty_values = []
         self.trade_market = np.zeros(self.n_envs)
         self.trade_limit = np.zeros(self.n_envs)
 
@@ -157,7 +169,7 @@ class MMVecEnv(gym.Env):
         # get current price for each env to get all of them to have same total value
         inventory_value = self.inventory_qty * p
         self.quote = self.capital - inventory_value
-        # this is updated when calling _get_observation, can initialize at 0
+        # normalized_inventory, this is updated when calling _get_observation, can initialize at 0
         self.norm_inventory = np.zeros(self.n_envs)
 
         self.bids = np.array(0 * self.n_envs).astype(np.float64)
@@ -192,9 +204,9 @@ class MMVecEnv(gym.Env):
         obs = self._get_observation()
         is_dones = is_over.T
         info = np.repeat({}, self.n_envs)
-
         if self.record_values:
-            self.inventory.append(obs[:, 0])  # VECTORIZE
+            self.inventory_qty_values.append(self.inventory_qty.copy())
+            self.inventory_values.append(self.norm_inventory)  # VECTORIZE
 
         for i in range(self.n_envs):
             if is_dones[i]:
@@ -220,9 +232,10 @@ class MMVecEnv(gym.Env):
         )
 
         self.inventory_qty += self.bid_sizes * execute_buy
-        logging.debug(f"execute market buy {execute_buy}")
-
-        self.quote -= self.bids * self.bid_sizes * execute_buy
+        self.quote -= self.best_ask[self.current_step] * self.bid_sizes * execute_buy
+        logging.debug(
+            f"market buy: {execute_buy}, qty: {self.bid_sizes},  price: {self.best_ask[self.current_step]}"
+        )
         self.bids = self.bids * (1 - execute_buy)
         self.bid_sizes = self.bid_sizes * (1 - execute_buy)
 
@@ -232,14 +245,20 @@ class MMVecEnv(gym.Env):
             * self.ask_sizes
             * execute_sell
         )
-        logging.debug(f"execute market sell {execute_sell}")
         self.inventory_qty -= self.ask_sizes * execute_sell
-        self.quote += self.asks * self.ask_sizes * execute_sell
+        self.quote += self.best_bid[self.current_step] * self.ask_sizes * execute_sell
+        logging.debug(
+            f"market sell: {execute_sell}, qty: {self.ask_sizes},  price: {self.best_bid[self.current_step]}"
+        )
+
         self.asks = self.asks * (1 - execute_sell)
         self.ask_sizes = self.ask_sizes * (1 - execute_sell)
         self.trade_market += execute_buy + execute_sell
 
         self.spread -= sell_spread + buy_spread
+        logging.debug(
+            f"market buy: {execute_buy}, market sell: {execute_sell}, inventory: {self.inventory_qty}"
+        )
 
     def _execute_limit_orders(self):
         execute_buy = self.bids >= self.low_price[self.current_step]
@@ -248,11 +267,13 @@ class MMVecEnv(gym.Env):
             * execute_buy
             * self.bid_sizes
         )
-        logging.debug(f"execute limit buy {execute_buy}")
         self.inventory_qty += self.bid_sizes * execute_buy
         self.quote -= self.bids * self.bid_sizes * execute_buy
         self.bids = self.bids * (1 - execute_buy)
         self.bid_sizes = self.bid_sizes * (1 - execute_buy)
+        logging.debug(
+            f"limit buy: {execute_buy}, qty: {self.bid_sizes}, price: {self.bids * self.bid_sizes}"
+        )
 
         execute_sell = self.asks <= self.high_price[self.current_step]
         sell_spread = (
@@ -260,16 +281,24 @@ class MMVecEnv(gym.Env):
             * execute_sell
             * self.ask_sizes
         )
-        logging.debug(f"execute limit sell {execute_sell}")
         self.inventory_qty -= self.ask_sizes * execute_sell
         self.quote += self.asks * self.ask_sizes * execute_sell
         self.asks = self.asks * (1 - execute_sell)
         self.ask_sizes = self.ask_sizes * (1 - execute_sell)
         self.trade_limit += execute_buy + execute_sell
+        logging.debug(
+            f"limit sell: {execute_sell}, qty: {self.ask_sizes}, price: {self.asks * self.ask_sizes}"
+        )
+
         self.spread += sell_spread + buy_spread
+        logging.debug(
+            f"limit buy: {execute_buy}, limit sell: {execute_sell}, inventory: {self.inventory_qty}"
+        )
 
     def _get_observation(self):
-        # normalize inventory
+        logging.debug(
+            f"inventory: {self.inventory_qty}, quote: {self.quote}, mid: {self.mid_price[self.current_step]}"
+        )
         self.norm_inventory = np.round(
             (
                 (
@@ -286,68 +315,18 @@ class MMVecEnv(gym.Env):
             4,
         )
 
-        intensity = (
-            np.full(
-                self.n_envs,
-                self.intensity[self.current_step],
-            )
-            .reshape(-1, 1)
-            .T
-        )
-        volatility = (
-            np.full(
-                self.n_envs,
-                self.volatility[self.current_step],
-            )
-            .reshape(-1, 1)
-            .T
-        )
-        osi = (
-            np.full(
-                self.n_envs,
-                self.osi[self.current_step],
-            )
-            .reshape(-1, 1)
-            .T
-        )
-        if self.obs_space == ObservationSpace.OSIObservation:
-            obs = np.concatenate(
-                [
-                    np.full(self.n_envs, self.mid_price[self.current_step])
-                    .reshape(-1, 1)
-                    .T,
-                    self.norm_inventory,
-                    intensity,
-                    volatility,
-                    osi,
-                ]
-            ).T
-        elif self.obs_space == ObservationSpace.SimpleObservation:
-            obs = np.concatenate(
-                [
-                    self.norm_inventory,
-                    volatility,
-                    intensity,
-                ]
-            ).T
-        elif self.obs_space == ObservationSpace.DummyObservation:
-            obs = np.array([random.uniform(-1, 1), random.uniform(-1, 1)])
+        if isinstance(self.obs_space, LinearObservation):
+            obs_dict = {"inventory": self.norm_inventory}
+            for k in self.obs_space.func_dict.keys():
+                if k != "inventory":
+                    val = getattr(self, k)[self.current_step].reshape(-1, 1).T
+                    obs_dict[k] = val
 
-        elif type(self.obs_space) == LinearObservation:
-            obs_dict = {
-                "inventory": self.norm_inventory,
-                "volatility": volatility,
-                "intensity": intensity,
-            }
-            normalized_obs = self.obs_space.convert_to_normalized(obs_dict)
-            obs_list = []
-            for i in ["inventory", "volatility", "intensity"]:
-                obs_list.append(normalized_obs[i])
-            obs = np.concatenate(obs_list).T
-
+            return self.obs_space.convert_to_normalized(obs_dict)
         else:
-            raise NotImplementedError(f"{self.obs_space} not implemented")
-        return obs  # VECTORIZE
+            raise NotImplementedError(
+                f"Observation space {type(self.obs_space)} not implemented, looking for {LinearObservation}"
+            )
 
     def _apply_action(self, action):
         """
@@ -370,9 +349,10 @@ class MMVecEnv(gym.Env):
             )
 
         bid_size, ask_size, bid, ask = formated_action
+        # NOTE: Used to set this so that the bid/ask size is at least 1
         # make sure both bid and ask size are at least 1
-        bid_size = np.maximum(bid_size, 1)
-        ask_size = np.maximum(ask_size, 1)
+        # bid_size = np.maximum(bid_size, 1)
+        # ask_size = np.maximum(ask_size, 1)
 
         self.bid_sizes, self.ask_sizes, self.bids, self.asks = (
             bid_size,
@@ -380,9 +360,21 @@ class MMVecEnv(gym.Env):
             bid,
             ask,
         )
+        logging.debug(
+            f"Applied: bid: {self.bid_sizes}@{bid}, ask: {self.ask_sizes}@{ask}"
+        )
 
     def _get_value(self):
         return self.quote + self.inventory_qty * self.mid_price[self.current_step]
+
+    def get_raw_recorded_values(self):
+        return {
+            "values": self.values,
+            "inventory_values": self.inventory_values,
+            "inventory_qty": self.inventory_qty_values,
+            "market_trades": self.trade_market,
+            "limit_trades": self.trade_limit,
+        }
 
     def get_metrics(self):
         assert self.record_values, "Must set record_values to True to get metrics"
@@ -394,15 +386,15 @@ class MMVecEnv(gym.Env):
 
         sharpe = total_return / volatility
         trades = self.trade_market + self.trade_limit
-        max_inventory = np.max(np.abs(self.inventory), axis=0)
+        max_inventory = np.max(np.abs(self.inventory_values), axis=0)
         values = {
             "timesteps": len(self.values),
-            "return": total_return,
+            "episode_return": total_return,
             "sharpe": sharpe,
             "drawdown": drawdown,
             "trades": trades,
             "max_inventory": max_inventory,
-            "mean_abs_inv": np.mean(np.abs(self.inventory), axis=0),
+            "mean_abs_inv": np.mean(np.abs(self.inventory_values), axis=0),
         }
         return values
 
@@ -438,7 +430,7 @@ class MMVecEnv(gym.Env):
     def reset_metrics(self):
         # if reset
         self.values = []
-        self.inventory = []
+        self.inventory_values = []
         self.trade_market = np.zeros(self.n_envs)
         self.trade_limit = np.zeros(self.n_envs)
 

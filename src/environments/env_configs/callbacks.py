@@ -1,9 +1,10 @@
 import logging
-from stable_baselines3.common.callbacks import BaseCallback
-from environments.env_configs.policies import ASPolicyVec
-from cloning import save_trained_model
 from ray import tune
 import numpy as np
+from stable_baselines3.common.callbacks import BaseCallback
+
+from src.environments.env_configs.policies import ASPolicyVec
+from src.cloning import save_trained_model
 
 
 class ExternalMeasureCallback(BaseCallback):
@@ -47,7 +48,7 @@ class ExternalMeasureCallback(BaseCallback):
             assert self.model_name != "", "Model name must be provided when saving"
         self.init_patience = patience
         self.patience = patience
-        self.wait = wait * freq
+        self.wait = wait
         self.freq = freq
         self.improvement_thresh = improvement_thresh
         self.eval_count = 0
@@ -55,7 +56,7 @@ class ExternalMeasureCallback(BaseCallback):
         if initial_expert:
             self.get_expert_performance()
         else:
-            self.best_reward = 0
+            self.best_reward = None
         self.best_performance_metrics = {}
 
     def get_expert_performance(self):
@@ -117,7 +118,6 @@ class ExternalMeasureCallback(BaseCallback):
         # If the agent is not improving, we want to stop training early
         self.eval_count += 1
         # only evaluate after "wait" freq periods have passed
-        # print(f"eval count: {self.eval_count}, wait: {self.wait}, freq: {self.freq}")
         if self.eval_count > self.wait:
             if self.eval_count % self.freq == 0:
                 # measure agent performance
@@ -136,7 +136,12 @@ class ExternalMeasureCallback(BaseCallback):
                         key: 0 for key in performance_metrics.keys()
                     }
                 agent_reward = self.get_performance(performance_metrics)
-                if agent_reward > self.best_reward * (1 + self.improvement_thresh):
+                if self.best_reward is None:
+                    self.best_reward = agent_reward
+                    self.best_performance_metrics = {
+                        k: np.mean(v) for k, v in performance_metrics.items()
+                    }
+                elif agent_reward > self.best_reward * (1 + self.improvement_thresh):
                     self.patience = self.init_patience
                     self.best_reward = agent_reward
                     self.best_performance_metrics = {
@@ -165,13 +170,14 @@ class ExternalMeasureCallback(BaseCallback):
         return True
 
     def get_performance(self, metrics):
+        print("sharpe", metrics["sharpe"])
         is_liquidated = np.max(metrics["max_inventory"]) > 0.99
-        return np.mean(
-            (
-                metrics["return"] / metrics["mean_abs_inv"] * (1 - is_liquidated)
-                + is_liquidated * 0
-            )
+        print(f"is_liquidated: {is_liquidated}")
+        aggregate = np.min(
+            [metrics["sharpe"], metrics["sharpe"] * (1 - is_liquidated)], axis=0
         )
+        print(f"aggregate: {aggregate}")
+        return np.mean(aggregate)
 
 
 class GroupRewardCallback(tune.Callback):
@@ -207,5 +213,7 @@ class GroupRewardCallback(tune.Callback):
                 result = np.mean(self.groups[group_id]["rewards"]) / (
                     1 + np.var(self.groups[group_id]["rewards"])
                 )
+            elif self.mode == "min":
+                result = np.min(self.groups[group_id]["rewards"])
             for trial in self.groups[group_id]["trials"]:
                 trial.last_result["group_reward"] = result

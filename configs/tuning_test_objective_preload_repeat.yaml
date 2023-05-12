@@ -1,0 +1,70 @@
+clone_data:
+  start_date: '2021_12_25'
+  end_date: '2021_12_27'
+eval_data:
+  start_date: '2021_12_28'
+  end_date: '2021_12_29'
+train_data:
+  start_date: '2021_12_30'
+  end_date: '2022_01_03'
+
+
+run_name: test_objective_preload_repeat
+__trial_index__: 1 # for replicating repeats
+env:
+  spaces:
+    action_space: NormalizedAction
+    observation_space:
+      type: linear
+      params: EverythingLinearSpace
+  reward_space: simple_inventory_pnl_reward
+  params:
+    inv_envs: 4
+    time_envs: 4
+    data_portion: 0.5
+    inv_jump: 0.18
+venv:
+  random: 1
+clone: false
+model:
+  algo: PPO
+  policy: MlpPolicy
+  model_params:
+    learning_rate: 0.0004020087913232143
+    n_steps: 32
+    batch_size: 512
+    n_epochs: 10
+    gamma: 0.999
+    gae_lambda: 0.9
+    clip_range: 1.0
+    clip_range_vf: 0.3
+    normalize_advantage: false
+    ent_coef: 1e-08
+    vf_coef: 0.8888993100968029
+    max_grad_norm: 0.6
+    sde_sample_freq: 16
+  policy_kwargs:
+    net_arch: {"pi": [64,64] ,"vf": [64,64]}
+
+expert_params:
+  max_order_size: 5
+  tick_size: 0.0001
+  max_ticks: 10
+  price_decimals: 4
+  inventory_target: 0
+  risk_aversion: 0.2
+  order_size: 1
+cloning:
+  tolerance: 0.015
+tuning:
+  repeats: 8
+  timesteps: 10000000
+  callback:
+    initial_expert: false
+    save_best_model: false
+    wait: 2
+    freq: 2
+    patience: 2
+    improvement_thresh: 0.01
+    time_envs: 4
+    inv_envs: 3

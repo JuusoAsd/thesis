@@ -10,8 +10,7 @@ use file_util::{
     get_folder_update_files, get_last_timestamp, FileHandler,
 };
 use parse_util::{
-    parse_both_records, parse_records_aggregate_ts, parse_records_avellaneda_stoikov,
-    parse_records_interim_data, parse_snapshot, parse_updates_v2,
+    parse_both_records, parse_records_avellaneda_stoikov, parse_snapshot, parse_updates_v2,
 };
 use std::env;
 
@@ -323,7 +322,8 @@ fn parse_data(redo: bool, interim: bool, base: bool) {
     if redo {
         // we are redoing so start from the first order book snapshot
         let first_snapshot = snapshot_files[0].clone();
-        let (ts, order_book) = match parse_snapshot(&first_snapshot, 0) {
+        let ts: i64;
+        (ts, order_book) = match parse_snapshot(&first_snapshot, 0) {
             Some((ts, ob)) => (ts, ob),
             None => panic!("Error parsing snapshot, no file found"),
         };
@@ -410,5 +410,5 @@ fn main() {
     // let last_file = current_files.last().unwrap();
     // let first_ts = get_first_timestamp(&last_file, 0);
     // println!("first_ts: {:?}", first_ts);
-    parse_data(false, true, true);
+    parse_data(true, false, true);
 }

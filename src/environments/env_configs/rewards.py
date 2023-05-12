@@ -31,6 +31,9 @@ class PnLReward(BaseRewardClass):
     def end_step(self):
         self.value_end = self.env._get_value()
         profit = self.value_end - self.value_start
+        inventory_is_high = (np.abs(self.env.norm_inventory) > 0.8)[0]
+
+        profit -= inventory_is_high * 100
         return profit
 
 
@@ -96,8 +99,8 @@ class MultistepPnl(BaseRewardClass):
             start_value = self.env.values[-self.steps]
         except IndexError:
             start_value = self.env.values[0]
-
-        return last_value - start_value
+        inventory_is_high = np.abs(self.env.norm_inventory) > 0.8
+        return (last_value - start_value) - inventory_is_high * 100
 
 
 class InventoryIntegralPenalty(BaseRewardClass):
@@ -199,7 +202,9 @@ class SpreadPnlReward(BaseRewardClass):
     def end_step(self):
         spread = self.env.spread
         inventory = np.abs(self.env.norm_inventory)
-        return spread / (1 + inventory)
+        inventory_is_high = np.abs(self.env.norm_inventory) > 0.8
+
+        return spread / (1 + inventory) - inventory_is_high * 100
 
 
 reward_dict = {

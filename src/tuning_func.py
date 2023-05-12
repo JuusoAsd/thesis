@@ -1,24 +1,31 @@
 import os
 from datetime import datetime, timedelta
 import logging
+import time
 
+import pandas as pd
 from ray.tune.search.repeater import TRIAL_INDEX
 from stable_baselines3 import PPO
+from omegaconf import OmegaConf
 
 
 # from testing import test_trained_vs_manual
-from cloning import (
-    clone_expert_config,
-    get_transitions,
+from src.cloning import (
     load_trained_model,
     load_model_by_config,
 )
-from environments.util import setup_venv, setup_venv_config
-from data_management import get_data_by_dates
-from util import set_seeds, get_config, filter_config_for_class
-from environments.env_configs.spaces import ActionSpace
-from environments.env_configs.rewards import AssymetricPnLDampening
-from environments.env_configs.callbacks import ExternalMeasureCallback
+from src.environments.util import setup_venv, setup_venv_config
+from src.data_management import get_data_by_dates
+from src.util import (
+    set_seeds,
+    get_config,
+    de_flatten_config,
+    locked_write_dataframe_to_csv,
+    create_config_hash,
+)
+from src.environments.env_configs.spaces import ActionSpace
+from src.environments.env_configs.rewards import AssymetricPnLDampening
+from src.environments.env_configs.callbacks import ExternalMeasureCallback
 
 
 os.environ["TUNE_DISABLE_STRICT_METRIC_CHECKING"] = "1"
@@ -78,7 +85,24 @@ def objective_simple(
     # return {"trial_reward": random.randint(1, 2), "lolno": 1, "group_reward": 0}
 
 
-def objective_clone(config):
+def violate_constraints(config):
+    """
+    check env specific constrains.
+    - mini-batch size should be a factor of n_steps * n_envs
+    """
+
+    env_size = config.env.params.inv_envs * config.env.params.time_envs
+    n_steps = config.model.model_params.n_steps
+    buffer_size = n_steps * env_size
+    mini_batch = config.model.model_params.batch_size
+
+    if buffer_size % mini_batch > 0:
+        return True
+    else:
+        return False
+
+
+def objective_clone(config_dict):
     """
     Objective function that
     - clones a model using BC and saves the cloned model
@@ -89,32 +113,47 @@ def objective_clone(config):
         - returns the evaluation metrics
     - eventually returns an aggregate of the evaluation metrics
     """
+    start_time = time.time()
+    un_flat = de_flatten_config(config_dict)
+    config = OmegaConf.create(un_flat)
+
+    # double callback wait time if not cloning
+    config.tuning.callback.wait = (
+        config.tuning.callback.wait * 2
+        if not config.clone
+        else config.tuning.callback.wait
+    )
+
+    # if violate_constraints(config):
+    #     print("violated constraints, interrupting")
+    #     return {"agg_reward": -1, "sharpe": -1, "mean_abs_inv": -1, "returns": -1}
+
     seed = 0
     set_seeds(seed)
 
     # for given config, setup the environment
-    venv = setup_venv_config(config.clone_data, config.env, config.venv)
+    venv = setup_venv_config(config.train_data, config.env, config.venv)
 
     # setup the model
-
     algo_dict = {"PPO": PPO}
-    filtered_config = filter_config_for_class(
-        config.model, algo_dict[config.model.algo]
-    )
-    student_model = algo_dict[config.model.algo](env=venv, **filtered_config)
-
-    # get transitions, execute cloning
-    transitions = get_transitions(config, venv)
-    clone_expert_config(config, venv, student_model, transitions)
 
     callback_data = get_data_by_dates(**config.eval_data)
     # get results from training the model
+    trial_unique_id = create_config_hash(config)
     rewards = []
-    for i in range(config.tuning.trials):
-        tune_venv = setup_venv_config(config.clone_data, config.env, config.venv)
+    for i in range(config.tuning.repeats):
         logging.info(f"Running trial {i}")
+        if config.clone:
+            model = load_model_by_config(config, venv)
+        else:
+            model = algo_dict[config.model.algo](
+                policy=config.model.policy,
+                env=venv,
+                **config.model.model_params,
+                policy_kwargs=config.model.policy_kwargs,
+            )
+        tune_venv = setup_venv_config(config.eval_data, config.env, config.venv)
         set_seeds(i)
-        model = load_model_by_config(config, tune_venv)
         callback = ExternalMeasureCallback(
             data=callback_data.to_numpy(), venv=tune_venv, **config.tuning.callback
         )
@@ -123,35 +162,109 @@ def objective_clone(config):
             log_interval=None,
             callback=callback,
         )
-        rewards.append(callback.best_reward)
+        # for each trial, save the average of best performance metrics
+        metrics = callback.best_performance_metrics
+        metrics["trial_nr"] = i
+        metrics["trial_id"] = trial_unique_id
+        metrics["best_reward"] = callback.best_reward
 
-    print(rewards)
+        rewards.append(metrics)
+
+    reward_df = pd.DataFrame(rewards)
+    agg_reward = reward_df.best_reward.mean() / (reward_df.best_reward.std() + 1e-6)
+    sharpe = reward_df.sharpe.mean()
+    mean_abs_inv = reward_df.mean_abs_inv.mean()
+    returns = reward_df.episode_return.mean()
+    duration = round((time.time() - start_time) / 60, 2)
+
+    locked_write_dataframe_to_csv(config.run_name, "rewards", reward_df)
+
+    config_dict["trial_id"] = trial_unique_id
+    config_dict["reward"] = agg_reward
+    config_dict["sharpe"] = sharpe
+    config_dict["mean_abs_inv"] = mean_abs_inv
+    config_dict["episode_return"] = returns
+    config_dict["duration"] = duration
+    config_df = pd.DataFrame([config_dict])
+    locked_write_dataframe_to_csv(config.run_name, "parameters", config_df)
+    return {
+        "agg_reward": agg_reward,
+        "sharpe": sharpe,
+        "mean_abs_inv": mean_abs_inv,
+        "returns": returns,
+        "duration": duration,
+    }
 
 
-class TestClass:
-    def __init__(self, a, b):
-        self.a = a
-        self.b = b
+def objective_preload_repeat(config_dict):
+    """
+    Objective function where:
+    - model is initialized with a cloned model (or not depending on config)
+    - there are multiple architecture options for the model
+    - repeats of the trials are performed using repeater rather than loop in objective
+    """
+    start_time = time.time()
+    un_flat = de_flatten_config(config_dict)
+    config = OmegaConf.create(un_flat)
+    set_seeds(config[TRIAL_INDEX])
+    config.pop(TRIAL_INDEX)
+    run_hash = create_config_hash(config)
 
-    def get(self):
-        print(self.a, self.b)
+    # for given config, setup the environment
+    venv = setup_venv_config(config.train_data, config.env, config.venv)
 
+    # setup the model
+    algo_dict = {"PPO": PPO}
 
-from enum import Enum
+    eval_data = get_data_by_dates(**config.eval_data)
+    if config.clone:
+        model_hash = create_config_hash(config.model.policy_kwargs)
+        config.model_name = model_hash
+        model = load_model_by_config(config, venv)
+    else:
+        kwarg_dict = OmegaConf.to_container(config.model.policy_kwargs, resolve=True)
+        model = algo_dict[config.model.algo](
+            policy=config.model.policy,
+            env=venv,
+            **config.model.model_params,
+            policy_kwargs=kwarg_dict,
+        )
+    tune_venv = setup_venv_config(config.eval_data, config.env, config.venv)
+    callback = ExternalMeasureCallback(
+        data=eval_data.to_numpy(), venv=tune_venv, **config.tuning.callback
+    )
+    model.learn(
+        total_timesteps=config.tuning.timesteps,
+        log_interval=None,
+        callback=callback,
+    )
+    metrics = callback.best_performance_metrics
+    metrics["trial_reward"] = callback.best_reward
+    duration = round((time.time() - start_time) / 60, 2)
+    metrics["duration"] = duration
+    metrics["trial_group"] = run_hash
+    reward_df = pd.DataFrame([metrics])
 
+    locked_write_dataframe_to_csv(config.run_name, "trial_results", reward_df)
+    config_dict["trial_group"] = run_hash
+    config_df = pd.DataFrame([config_dict])
 
-class Color(Enum):
-    RED = 1
-    GREEN = 2
-    BLUE = 3
+    locked_write_dataframe_to_csv(config.run_name, "trial_parameters", config_df)
+    return {
+        "trial_group": run_hash,
+        "trial_reward": metrics["trial_reward"],
+        "sharpe": metrics["sharpe"],
+        "returns": metrics["episode_return"],
+        "max_inventory": metrics["max_inventory"],
+        "mean_abs_inv": metrics["mean_abs_inv"],
+        "duration": duration,
+    }
 
-
-# cls = hydra.utils.instantiate(test_config.test_class)
-# cls.get()
-# chosen_color = Color[test_config.color]
-# print(chosen_color)
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    test_config = get_config("tuning_train_eval_single_run")
-    objective_clone(test_config)
+    # config = get_config("tuning_train_eval_single_run")
+    # print(config)
+    # objective_clone(config)
+
+    config = get_config("tuning_test_objective_preload_repeat")
+    objective_preload_repeat(config)

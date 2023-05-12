@@ -114,6 +114,7 @@ pub struct AggregateRecord {
     high_price: Decimal,
     buy_volume: Decimal,
     sell_volume: Decimal,
+    order_book_imbalance: Decimal,
 }
 
 impl AggregateRecord {
@@ -125,6 +126,7 @@ impl AggregateRecord {
         high_price: Decimal,
         buy_volume: Decimal,
         sell_volume: Decimal,
+        order_book_imbalance: Decimal,
     ) -> Self {
         Self {
             timestamp,
@@ -134,6 +136,7 @@ impl AggregateRecord {
             high_price,
             buy_volume,
             sell_volume,
+            order_book_imbalance,
         }
     }
 }

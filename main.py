@@ -97,12 +97,7 @@ def curve_func(t, a, k):
     return a * np.exp(-k * t)
 
 
-if __name__ == "__main__":
-    # run_manual()
-    # run_ml()
-    # run_ml_cloned()
-    # run_ml_cloned()
-
+def test_fit_curve():
     a = 2
     k = 0.1
     price_levels = np.array(range(1, 1996))
@@ -130,3 +125,39 @@ if __name__ == "__main__":
     #     slope = np.mean(y) - intercept * np.mean(x)
     #     slope_exp = np.exp(slope)
     #     print(slope_exp, intercept)
+
+
+from datetime import datetime, timedelta
+from stable_baselines3 import PPO
+from model_testing import test_trained_model, test_trained_vs_manual
+from environments.util import setup_venv
+from data_management import get_data_by_dates
+from cloning import load_trained_model, save_trained_model
+from environments.env_configs.spaces import ActionSpace
+from environments.env_configs.rewards import (
+    PnLReward,
+    AssymetricPnLDampening,
+    InventoryIntegralPenalty,
+    MultistepPnl,
+    InventoryReward,
+    SimpleInventoryPnlReward,
+    SpreadPnlReward,
+)
+from environments.env_configs.callbacks import ExternalMeasureCallback
+
+if __name__ == "__main__":
+    reward = AssymetricPnLDampening
+    venv = setup_venv(
+        data=get_data_by_dates("2021_12_24"),
+        act_space=ActionSpace.NormalizedAction,
+        reward_class=reward,
+        inv_envs=5,
+        time_envs=4,
+        env_params={
+            "inv_jump": 0.18,
+            "data_portion": 0.5,
+            "reward_params": {"liquidation_threshold": 0.8},
+        },
+    )
+    model = load_trained_model("clone_bc", venv)
+    model.learn(total_timesteps=1_000)

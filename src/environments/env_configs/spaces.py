@@ -6,8 +6,8 @@ from gym import spaces
 
 def get_space(space_dict):
     return spaces.Box(
-        low=np.array([space_dict[key][0] for key in space_dict.keys()]),
-        high=np.array([space_dict[key][1] for key in space_dict.keys()]),
+        low=np.float32(np.array([space_dict[key][0] for key in space_dict.keys()])),
+        high=np.float32(np.array([space_dict[key][1] for key in space_dict.keys()])),
         shape=(len(space_dict.keys()),),
         dtype=np.float64,
     )
@@ -15,8 +15,8 @@ def get_space(space_dict):
 
 def get_integer_space(space_dict):
     return spaces.Box(
-        low=np.array([space_dict[key][0] for key in space_dict.keys()]),
-        high=np.array([space_dict[key][1] for key in space_dict.keys()]),
+        low=np.float32(np.array([space_dict[key][0] for key in space_dict.keys()])),
+        high=np.float32(np.array([space_dict[key][1] for key in space_dict.keys()])),
         shape=(len(space_dict.keys()),),
         dtype=int,
     )
@@ -90,10 +90,38 @@ class ObservationSpace(Enum):
 
 
 class LinearObservationSpaces(Enum):
+    # enum for different possible observation spaces
+    # keys must be found in the environment
+    OnlyInventorySpace = {
+        "inventory": {"min": -1, "max": 1, "min_actual": -2, "max_actual": 2},
+    }
     SimpleLinearSpace = {
         "inventory": {"min": -1, "max": 1, "min_actual": -2, "max_actual": 2},
         "volatility": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 0.01},
         "intensity": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 100_000},
+    }
+
+    OSILinearSpace = {
+        "inventory": {"min": -1, "max": 1, "min_actual": -2, "max_actual": 2},
+        "volatility": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 0.01},
+        "intensity": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 100_000},
+        "osi": {"min": -1, "max": 1, "min_actual": -100, "max_actual": 100},
+    }
+
+    EverythingLinearSpace = {
+        "inventory": {"min": -1, "max": 1, "min_actual": -2, "max_actual": 2},
+        "volatility": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 0.01},
+        "intensity": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 100_000},
+        "osi": {"min": -1, "max": 1, "min_actual": -100, "max_actual": 100},
+        "order_book_imbalance": {
+            "min": -1,
+            "max": 1,
+            "min_actual": -1,
+            "max_actual": 1,
+        },
+        "current_second": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 60},
+        "current_minute": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 60},
+        "current_hour": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 24},
     }
 
 
@@ -160,4 +188,7 @@ class LinearObservation:
                 np.maximum(calculated_value, self.func_dict[obs_type]["min"]),
                 self.func_dict[obs_type]["max"],
             )
-        return normalized_obs
+        obs_list = []
+        for k, v in normalized_obs.items():
+            obs_list.append(v)
+        return np.concatenate(obs_list).T

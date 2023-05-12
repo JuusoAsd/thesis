@@ -1,22 +1,19 @@
 from datetime import datetime, timedelta
 from stable_baselines3 import PPO
-from testing import test_trained_model, test_trained_vs_manual
-from environments.util import setup_venv
-from data_management import get_data_by_dates
-from cloning import load_trained_model, save_trained_model
-from environments.env_configs.spaces import ActionSpace
-from environments.env_configs.rewards import (
+
+from src.data_management import get_data_by_dates
+from src.cloning import load_trained_model, save_trained_model
+from src.util import get_config
+from src.model_testing import test_trained_vs_manual
+from src.environments.util import setup_venv
+from src.environments.env_configs.spaces import ActionSpace
+from src.environments.env_configs.rewards import (
     PnLReward,
     AssymetricPnLDampening,
     InventoryIntegralPenalty,
-    MultistepPnl,
-    InventoryReward,
-    SimpleInventoryPnlReward,
     SpreadPnlReward,
 )
-from environments.env_configs.callbacks import ExternalMeasureCallback
-from util import set_seeds, get_config
-import numpy as np
+from src.environments.env_configs.callbacks import ExternalMeasureCallback
 
 
 def train_model():

@@ -9,18 +9,21 @@ objective:
   validation_duration: 7
   timesteps: 10_000_000
   validation:
-    wait: 3
-    freq: 5
+    wait: 10
+    freq: 3
     patience: 3
     improvement_thresh: 0.01
+    time_envs: 4
+    inv_envs: 3
 
 reporter:
-  metric_columns: ["trial_reward", "group_reward", 'max_inventory','mean_absolute_inventory','sharpe']
+  metric_columns: ["trial_reward", "group_reward", 'max_inventory','sharpe']
   sort_metric: "group_reward"
   report_frequency: 30
+  max_progress_rows: 30
 
 tuner:
-  name: "my_tune_run"
+  name: "tune_multiple_val_envs"
   samples: 2400
 
 searcher:
@@ -61,8 +64,9 @@ search_space:
   clip_range_vf: ["choice", [null, 0.1, 0.2, 0.3, 0.5]] # TODO what values are good here?
   n_epochs: ["choice", [1, 5, 10, 20]]
   normalize_advantage: ["choice", [True, False]]
-  # use_sde: ["choice", [True, False]] this does not work with loaded models?
   sde_sample_freq: ["choice", [-1, 4, 8, 16, 32, 64, 128, 256]]
+  # use_sde: ["choice", [True, False]] this does not work with loaded models?
+
   # policy_kwargs.ortho_init: ["choice", [True, False]]
   # policy_kwargs.activation_fn: ["choice", ["nn.ReLU", "nn.Tanh", "nn.LeakyReLU"]]
   # policy_kwargs.enable_critic_lstm: ["choice", [True, False]]

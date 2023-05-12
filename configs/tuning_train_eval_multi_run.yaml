@@ -1,0 +1,171 @@
+
+# ----------SETUP----------
+run_name: wide_tuning
+samples: 5 # NOTE: this runs 8x for each of the run as repeating is done in-loop
+
+reporter: 
+  metric_columns: ["agg_reward", "sharpe", "mean_abs_inv", "returns", duration]
+  sort_metric: "agg_reward"
+  report_frequency: 30 # seconds
+  report_rows: 30
+searcher:
+  metric: "agg_reward" # what metric searcher optimizes for
+  initial_values:
+    env:
+      spaces: 
+        observation_space:
+          params: SimpleLinearSpace
+      reward: pnl
+
+    clone: True
+    model:
+      # algo: PPO
+      # policy: MlpPolicy
+      model_params:
+        learning_rate: 0.00035
+        n_steps: 16
+        batch_size: 512
+        n_epochs: 5
+        gamma: 0.999
+        gae_lambda: 0.95
+        clip_range: 0.3
+        clip_range_vf: 0.2
+        normalize_advantage: True
+        ent_coef: 1e-5
+        vf_coef: 0.65
+        max_grad_norm: 0.5
+        sde_sample_freq: 32
+      policy_kwargs:
+        # state_vars: 12801
+        # ortho_init: True
+        # activation_fn: nn.ReLU
+        # enable_critic_lstm: False
+        # lstm_hidden_size: 256
+        net_arch: [512, 512, {"vf": [512], "pi": [512]}]
+
+
+# ----------SEARCH----------
+search_space:
+  # ----------ENVIRONMENT----------
+  clone_data:
+    start_date: "2021_12_25"
+    end_date: "2021_12_27"
+  eval_data:
+    start_date: "2021_12_28"
+    end_date: "2021_12_29"
+  train_data:
+    start_date: "2021_12_30"
+    end_date: "2022_01_03"
+
+  env: 
+    spaces:
+      action_space: NormalizedAction
+      observation_space: 
+        type: "linear"
+        params: ["choice", [SimpleLinearSpace, OSILinearSpace]]
+    reward: 
+      - choice
+      - - assymetric_pnl_dampening
+        - pnl
+        - inventory
+        - spreadpnl
+        - multistep_pnl
+        - inventory_integral_penalty
+        - simple_inventory_pnl_reward
+    params:
+      inv_envs: 4
+      time_envs: 4
+      data_portion: 0.5
+      inv_jump: 0.18  
+
+  venv:
+    random: 1
+
+  # ----------MODEL----------
+  clone: ["choice", [True, False]]
+  model:
+    algo: "PPO"
+    # policy: ["choice", ["MlpPolicy", "CnnPolicy"]]
+    policy: MlpPolicy
+    model_params:
+        learning_rate: ["loguniform", 1e-5, 0.001]
+        n_steps: ["choice", [4, 8, 16, 32, 64, 128, 256, 512, 1024]]
+        batch_size: ["choice", [32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]]
+        n_epochs: ["choice", [1, 5, 10, 20]]
+        gamma: ["choice", [0.995, 0.999, 0.9995, 0.9999]]
+        gae_lambda: ["choice", [0.8, 0.9, 0.92, 0.95, 0.98, 0.99, 1.0]]
+        clip_range: ["choice", [0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 0.9, 1.0]]
+        clip_range_vf: ["choice", [null, 0.1, 0.2, 0.3, 0.5]]
+        normalize_advantage: ["choice", [True, False]]
+        ent_coef: ["choice", [0, 1e-8, 1e-5, 0.01, 0.1, 0.2, 0.4, 0.5]]
+        vf_coef: ["uniform", 0, 1]
+        max_grad_norm: ["choice", [0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 5]]
+        sde_sample_freq: ["choice", [-1, 4, 8, 16, 32, 64, 128, 256]]
+    policy_kwargs:
+        net_arch: 
+        - choice
+        - - [64]
+          - [64, 64]
+          - [512]
+          - [512, 512]
+          - [1024]
+          - [2048]
+          - [1024, 1024]
+          - [2048, 2048]
+        # state_vars: ["choice", [12801, 13825]]
+        # ortho_init: ["choice", [True, False]]
+        # activation_fn: ["choice", ["nn.ReLU", "nn.Tanh", "nn.LeakyReLU"]]
+        # enable_critic_lstm: ["choice", [True, False]]
+        # lstm_hidden_size: ["choice", [64, 128, 256, 512, 1024]]
+        # # list containing sublists
+        #   - [ 64, {"vf": [64], "pi": [64]}]
+        #   - [ 512, {"vf": [512], "pi": [512]}]
+        #   - [ 1024, {"vf": [1024], "pi": [1024]}]
+        #   - [ 2048, {"vf": [128], "pi": [128]}]
+        #   - [ 2048, {"vf": [256], "pi": [256]}]
+        #   - [ 2048, {"vf": [512], "pi": [512]}]
+        #   - [ 2048, {"vf": [2048], "pi": [2048]}]
+        #   - [ 64, 64, {"vf": [64], "pi": [64]}]
+        #   - [ 512, 512, {"vf": [512], "pi": [512]}]
+        #   - [ 1024, 1024, {"vf": [1024], "pi": [1024]}]
+        #   - [ 2048, 2048, {"vf": [2048], "pi": [2048]}]
+
+
+
+  # ----------EXPERT----------
+  expert_params:
+    max_order_size: 5
+    tick_size: 0.0001
+    max_ticks: 10
+    price_decimals: 4
+    inventory_target: 0
+    risk_aversion: 0.2
+    order_size: 1
+      
+  # ----------CLONING----------
+  cloning:
+    tolerance: 0.015
+
+  # ----------TUNING----------
+  tuning:
+    trials: 8
+    timesteps: 10_000_000
+    callback:
+      initial_expert: False
+      save_best_model: False
+      wait: 2
+      freq: 2
+      patience: 2
+      improvement_thresh: 0.01
+      time_envs: 4
+      inv_envs: 3
+
+
+# ----------RANDOM----------
+
+test_class:
+  _target_: tuning_func.TestClass
+  a: 1
+  b: 2
+
+color: RED

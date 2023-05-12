@@ -1,20 +1,18 @@
 import logging
-
 from stable_baselines3.common.vec_env import VecNormalize
-from environments.mm_env_vec import MMVecEnv, SBMMVecEnv
-from environments.env_configs.rewards import *
-from environments.env_configs.spaces import (
+
+from src.data_management import get_data_by_dates
+from src.environments.mm_env_vec import MMVecEnv, SBMMVecEnv
+from src.environments.env_configs.rewards import InventoryIntegralPenalty
+from src.environments.env_configs.spaces import (
     ActionSpace,
     LinearObservationSpaces,
     LinearObservation,
 )
-from ray.tune.search.repeater import Repeater
-from ray.tune.search import Searcher
+from src.environments.env_configs.rewards import reward_dict
+
 
 logger = logging.getLogger(__name__)
-from typing import Dict, List, Optional
-from data_management import get_data_by_dates
-from environments.env_configs.rewards import reward_dict
 
 
 def setup_venv(
@@ -31,10 +29,8 @@ def setup_venv(
     column_mapping = {col: n for (n, col) in enumerate(data.columns)}
     env = MMVecEnv(
         data.to_numpy(),
-        params={
-            "observation_space": obs_space,
-            "action_space": act_space,
-        },
+        observation_space=obs_space,
+        action_space=act_space,
         column_mapping=column_mapping,
         reward_class=reward_class,
         time_envs=time_envs,
@@ -60,7 +56,7 @@ def setup_venv_config(data_config, env_config, venv_config):
     else:
         raise NotImplementedError
 
-    reward = reward_dict[env_config.reward]
+    reward = reward_dict[env_config.reward_space]
 
     env = MMVecEnv(
         data=data.to_numpy(),

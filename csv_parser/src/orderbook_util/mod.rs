@@ -257,6 +257,36 @@ impl Orderbook {
         }
         result
     }
+
+    pub fn get_imbalance(&self, n: i64) -> Option<Decimal> {
+        // calculate order book imbalance for first n levels of bids and asks
+        let mut bid_size = Decimal::new(0, 0);
+        let mut ask_size = Decimal::new(0, 0);
+        let mut i = 0;
+        for (_, level) in self.bids.iter().rev() {
+            if i < n {
+                bid_size += level.size;
+                i += 1;
+            } else {
+                break;
+            }
+        }
+        let mut i = 0;
+        for (_, level) in self.asks.iter() {
+            if i < n {
+                ask_size += level.size;
+                i += 1;
+            } else {
+                break;
+            }
+        }
+        if bid_size + ask_size == Decimal::new(0, 0) {
+            None
+        } else {
+            // round to 4 decimal places
+            Some(((bid_size - ask_size) / (bid_size + ask_size)).round_dp(4))
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Copy, Clone, PartialEq, Eq, Hash)]

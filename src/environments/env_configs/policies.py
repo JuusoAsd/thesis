@@ -1,7 +1,8 @@
 from abc import ABC
+import logging
 import numpy as np
 
-from environments.env_configs.spaces import (
+from src.environments.env_configs.spaces import (
     ActionSpace,
     ObservationSpace,
     LinearObservation,
@@ -38,7 +39,7 @@ class PolicyBase(ABC):
 class ASPolicyVec:
     def __init__(
         self,
-        env,
+        env,  # this should be the non-vectorized environment
         max_order_size,
         tick_size,
         max_ticks,
@@ -182,7 +183,7 @@ class ASPolicyVec:
         return self.get_action_no_mid(np.array(obs).T)
 
     def get_action_func(self):
-        if type(self.obs_type) == ObservationSpace:
+        if isinstance(self.obs_type, ObservationSpace):
             action_func_dict = {
                 (
                     ObservationSpace.OSIObservation,
@@ -202,12 +203,16 @@ class ASPolicyVec:
                 ): self.get_no_size_action_linear,
             }
             key = (self.obs_type, self.act_type)
-        elif type(self.obs_type) == LinearObservation:
+        elif isinstance(self.obs_type, LinearObservation):
             action_func_dict = {
                 ActionSpace.NoSizeAction: self.get_no_size_action_linear,
                 ActionSpace.NormalizedAction: self.get_action_no_mid_linear,
             }
             key = self.act_type
+        else:
+            raise NotImplementedError(
+                f"obs type not implemented for {self.obs_type}, type: {type(self.obs_type)}. Looking for either {LinearObservation} or {ObservationSpace}"
+            )
 
         try:
             func = action_func_dict[key]
@@ -219,6 +224,7 @@ class ASPolicyVec:
 
 
 def convert_continuous_action(env, action):
+    logging.debug(f"continuous action input: {action}")
     # this is not fully continuous but uses float and looks like one
     bid_sizes = np.round(action[:, 0] * env.max_order_size)
     ask_sizes = np.round(action[:, 1] * env.max_order_size)
@@ -236,6 +242,9 @@ def convert_continuous_action(env, action):
     # asks = action[:, 3] * env.max_ticks * env.tick_size
     # bids_round = np.round(env.mid_price[env.current_step] + bids, env.price_decimals)
     # asks_round = np.round(env.mid_price[env.current_step] + asks, env.price_decimals)
+    logging.debug(
+        f"continuous action output: {bid_sizes, ask_sizes, bid_round, ask_round}"
+    )
     return bid_sizes, ask_sizes, bid_round, ask_round
 
 

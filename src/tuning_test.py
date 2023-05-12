@@ -1,63 +1,49 @@
 import os
-import gym
-import numpy as np
-from functools import partial
-from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv
-from ray import tune
-from ray.tune import CLIReporter
-from ray.tune.schedulers import ASHAScheduler
-from ray.air.config import RunConfig
-from ray.tune.search.repeater import Repeater, TRIAL_INDEX
-from ray.tune.search.hyperopt import HyperOptSearch
-
-from datetime import datetime, timedelta
-from stable_baselines3 import PPO
-from testing import test_trained_model, test_trained_vs_manual
-from environments.util import setup_venv
-from data_management import get_data_by_dates
-from cloning import load_trained_model, save_trained_model
-from environments.env_configs.spaces import ActionSpace
-from environments.env_configs.rewards import (
-    PnLReward,
-    AssymetricPnLDampening,
-    InventoryIntegralPenalty,
-    MultistepPnl,
-    InventoryReward,
-    SimpleInventoryPnlReward,
-    SpreadPnlReward,
-)
-from environments.env_configs.callbacks import (
-    ExternalMeasureCallback,
-    GroupRewardCallback,
-)
-from ray.tune.search.bayesopt import BayesOptSearch
-from util import set_seeds, get_config
 import random
-
-from ray.tune.schedulers import AsyncHyperBandScheduler
 import time
+import collections.abc as collections
+
+from omegaconf import OmegaConf
+from ray import tune
+from ray.air.config import RunConfig
+
+from src.util import get_config, create_parameter_space
 
 
-def clone_objective(config):
+def algo_params_sampler(config):
+    algo = config["model"]["algo"]
+    params = config["model"]["model_params"][algo]
+    return params
+
+
+# def create_parameter_space(config):
+#     param_space = {}
+#     for key, value in config.items():
+#         if isinstance(value, collections.Sequence):
+#             param_space[key] = getattr(tune, value[0])(*value[1:])
+#         elif isinstance(value, collections.Mapping):
+#             nested_space = create_parameter_space(value)
+#             param_space[key] = nested_space
+#         else:
+#             param_space[key] = value
+#     return param_space
+
+
+def clone_objective(config_dict):
+    config = OmegaConf.create(config_dict)
+
     print("Running objective function")
     print(config)
+    # print(config["model"])
+    print(config.model)
     time.sleep(20)
     return {"res": random.randint(0, 100)}
 
 
 def main_func():
-    search_algo = HyperOptSearch(
-        mode="max",
-    )
-    search_space = {
-        "x": tune.choice([0, 1, 2, 3, 4]),
-        "y": tune.choice([0, 1, 2, 3, 4]),
-        "z": 42,
-        "w": {"a": 1, "b": 2},
-    }
-    # repeater = Repeater(search_algo, set_index=True, repeat=5)
-
+    # test_config = get_config("tuning_train_eval_single_run")
+    test_config = get_config("tuning_train_eval_multi_run")
+    search_space = create_parameter_space(test_config.search_space)
     tuner = tune.Tuner(
         trainable=clone_objective,
         param_space=search_space,

@@ -1,5 +1,5 @@
-from imitation.algorithms.dagger import BetaSchedule
 import numpy as np
+from imitation.algorithms.dagger import BetaSchedule
 from imitation.algorithms import bc
 from stable_baselines3.common.evaluation import evaluate_policy
 

@@ -33,13 +33,14 @@ class BaseReader:
             if line == "":
                 return False
             self.line_count += 1
-            timestamp, bid, ask, low, high, _, _ = line.rstrip().split(",")
+            timestamp, bid, ask, low, high, _, _, imbalance = line.rstrip().split(",")
             bid = float(bid)
             ask = float(ask)
             mid = round((bid + ask) / 2, 5)
             timestamp = int(timestamp)
             low = float(low)
             high = float(high)
+            imbalance = float(imbalance)
 
             self.last_timestamp = timestamp
             if update:
@@ -48,7 +49,14 @@ class BaseReader:
                 self.last_mid = mid
                 self.last_low = low
                 self.last_high = high
+                self.last_imbalance = imbalance
+
+                # using self.last_timestamp (timestamp in milliseconds), calculate current second, minute, hour
+                self.last_second = int(timestamp / 1000) % 60
+                self.last_minute = int(timestamp / 1000 / 60) % 60
+                self.last_hour = int(timestamp / 1000 / 60 / 60) % 24
             return True
+
         except Exception as e:
             print(e)
             print(line, self.line_count)
@@ -62,6 +70,10 @@ class BaseReader:
             self.last_mid,
             self.last_low,
             self.last_high,
+            self.last_imbalance,
+            self.last_second,
+            self.last_minute,
+            self.last_hour,
         ]
 
 
@@ -93,7 +105,6 @@ class IndicatorReader:
             mid = round(float(mid), 5)
             size = float(size)
             price = float(price)
-
             self.last_timestamp = timestamp
             if update:
                 self.last_mid = mid
@@ -127,7 +138,7 @@ def parse_indicators_v1():
     target_path = os.getenv("INDICATOR_PATH")
 
     # set update interval to 0 for most calculations, intensity is 99.5% of time so update it to every 30 minutes
-    redo = False
+    redo = True
 
     n = 0
     last_update = 0
@@ -182,6 +193,10 @@ def parse_indicators_v1():
                             "mid_price",
                             "low_price",
                             "high_price",
+                            "order_book_imbalance",
+                            "current_second",
+                            "current_minute",
+                            "current_hour",
                             "intensity",
                             "volatility",
                             "osi",
