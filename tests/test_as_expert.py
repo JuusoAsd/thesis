@@ -1,4 +1,4 @@
-import sys, os
+import sys, os, logging
 import numpy as np
 
 sys.path.append(os.path.realpath(os.path.dirname(__file__) + "/.."))
@@ -23,6 +23,8 @@ def test_get_data_imports():
 
 
 def test_create_try_expert(caplog):
+    # caplog.set_level(logging.DEBUG)
+
     venv = setup_venv_config(config.data, config.env, config.venv)
     expert_policy = ASPolicyVec(venv.env, **config.expert_params)
     action_func = expert_policy.get_action_func()
@@ -38,6 +40,7 @@ def test_create_try_expert(caplog):
 
 
 def test_create_try_expert_parallel(caplog):
+    # caplog.set_level(logging.DEBUG)
     venv = setup_venv_config(config.data, config.env_parallel, config.venv)
     expert_policy = ASPolicyVec(venv.env, **config.expert_params)
     action_func = expert_policy.get_action_func()
@@ -48,7 +51,8 @@ def test_create_try_expert_parallel(caplog):
         obs, reward, done, info = venv.step(action)
 
 
-def test_run_2_expert_parallel():
+def test_run_2_expert_parallel(caplog):
+    # caplog.set_level(logging.DEBUG)
     venv = setup_venv_config(config.data, config.test_2_env, config.venv)
     expert_policy = ASPolicyVec(venv.env, **config.expert_params)
     action_func = expert_policy.get_action_func()
@@ -69,3 +73,5 @@ def test_run_2_expert_parallel():
 
     for i in range(len(values["inventory_qty"])):
         assert values["inventory_qty"][i].tolist() == expected_arrays[i].tolist()
+
+    print(venv.env.get_metrics())

@@ -1,19 +1,16 @@
-import sys, os, logging
+import logging
 import numpy as np
 import pandas as pd
+import pytest
+from numpy.testing import assert_allclose
 
 from dotenv import load_dotenv
 
 load_dotenv(".env")
-sys.path.append(os.path.realpath(os.path.dirname(__file__) + "/.."))
-sys.path.append(os.path.realpath(os.path.dirname(__file__) + "/../src"))
 
-from src.data_management import get_data_by_dates
 from src.util import get_test_config
 from src.environments.util import setup_venv_config, setup_venv
-from src.environments.env_configs.policies import ASPolicyVec
 from src.environments.env_configs.spaces import (
-    ActionSpace,
     LinearObservationSpaces,
     LinearObservation,
 )
@@ -61,7 +58,8 @@ df = pd.DataFrame(test_data)
 df["mid_price"] = (df["best_bid"] + df["best_ask"]) / 2
 
 
-def test_limit_order():
+def test_limit_order(caplog):
+    # caplog.set_level(logging.DEBUG)
     venv = setup_venv(
         df,
         obs_space=LinearObservation(
@@ -79,9 +77,11 @@ def test_limit_order():
     assert expected_value == values["values"][0][0], "limit order PnL"
     # check if inventory is correct
     assert venv.env.inventory_qty == 0, "limit order inventory"
+    assert_allclose(venv.env.spread, [0.06])
 
 
-def test_market_order():
+def test_market_order(caplog):
+    # caplog.set_level(logging.DEBUG)
     venv = setup_venv(
         df,
         obs_space=LinearObservation(
@@ -103,6 +103,7 @@ def test_market_order():
     ), f"market order PnL, {expected_value} != {values['values'][0][0]}"
     # check if inventory is correct
     assert venv.env.inventory_qty == 0, "market order inventory"
+    assert_allclose(venv.env.spread, [-60])
 
 
 def test_zero_qty():
@@ -122,3 +123,66 @@ def test_zero_qty():
     assert expected_value == values["values"][0][0], "no trades PnL"
     # check if inventory is correct
     assert venv.env.inventory_qty == 0, "no trades inventory"
+
+
+def test_metrics():
+    venv = setup_venv(
+        df,
+        obs_space=LinearObservation(
+            LinearObservationSpaces.OnlyInventorySpace,
+        ),
+        env_params={"max_ticks": 30},
+    )
+    values = [100, 80, 110, 120]
+    inventory = [0.5, 0.7, 0.9]
+    venv.env.values = [np.array([x]) for x in values]
+    venv.env.inventory_values = [np.array([x]) for x in inventory]
+
+    metrics = venv.env.get_metrics()
+    assert pytest.approx(metrics["episode_return"][0], rel=1e-5) == 0.2
+    assert pytest.approx(metrics["sharpe"][0], rel=1e-5) == 0.2 / np.std(
+        np.diff(np.array(values))
+    )
+    assert pytest.approx(metrics["drawdown"][0], rel=1e-5) == -0.2
+    assert pytest.approx(metrics["max_inventory"][0], rel=1e-5) == 0.9
+    assert pytest.approx(metrics["mean_abs_inv"][0], rel=1e-5) == np.mean(
+        np.abs(np.array(inventory))
+    )
+
+
+def test_metrics_parallel():
+    venv = setup_venv(
+        df,
+        obs_space=LinearObservation(
+            LinearObservationSpaces.OnlyInventorySpace,
+        ),
+        env_params={"max_ticks": 30},
+    )
+    values = [100, 80, 110, 120]
+    inventory = [0.5, 0.7, 0.9]
+    venv.env.values = [np.array([x, x]) for x in values]
+    venv.env.inventory_values = [np.array([x, x]) for x in inventory]
+    metrics = venv.env.get_metrics()
+
+    print(metrics)
+    liquidated = metrics["max_inventory"] > 0.5
+    print(liquidated)
+    val = metrics["sharpe"] * (1 - liquidated) + liquidated * 100
+    print(metrics["sharpe"])
+    print(val)
+    val_conc = np.array([metrics["sharpe"], val])
+    print(val_conc)
+    print(np.min(val_conc, axis=0))
+
+    sharpe = 0.2 / np.std(np.diff(np.array(values)))
+    inventory = np.mean(np.abs(np.array(inventory)))
+    assert pytest.approx(metrics["episode_return"][0], rel=1e-5) == 0.2
+    assert pytest.approx(metrics["episode_return"][1], rel=1e-5) == 0.2
+    assert pytest.approx(metrics["sharpe"][0], rel=1e-5) == sharpe
+    assert pytest.approx(metrics["sharpe"][1], rel=1e-5) == sharpe
+    assert pytest.approx(metrics["drawdown"][0], rel=1e-5) == -0.2
+    assert pytest.approx(metrics["drawdown"][1], rel=1e-5) == -0.2
+    assert pytest.approx(metrics["max_inventory"][0], rel=1e-5) == 0.9
+    assert pytest.approx(metrics["max_inventory"][1], rel=1e-5) == 0.9
+    assert pytest.approx(metrics["mean_abs_inv"][0], rel=1e-5) == inventory
+    assert pytest.approx(metrics["mean_abs_inv"][1], rel=1e-5) == inventory

@@ -1,0 +1,116 @@
+"""
+Testing GroupRewardCallback is difficult as it interacts with the repeater class
+Ignored for now
+"""
+import sys, os, logging
+import numpy as np
+import pandas as pd
+import pytest
+
+from dotenv import load_dotenv
+
+load_dotenv(".env")
+
+from src.data_management import get_data_by_dates
+from src.util import get_test_config
+from src.environments.util import setup_venv_config, setup_venv
+from src.environments.env_configs.policies import ASPolicyVec
+from src.environments.env_configs.spaces import (
+    ActionSpace,
+    LinearObservationSpaces,
+    LinearObservation,
+)
+from src.environments.env_configs.callbacks import ExternalMeasureCallback
+
+config = get_test_config("test_env")
+test_data = {
+    "best_bid": [99, 99, 99],  # best bid price, used to determine market order
+    "best_ask": [101, 101, 101],
+    "low_price": [50, 50, 50],  # low price, used to determine limit buys
+    "high_price": [150, 150, 150],  # high price, used to determine limit sells
+}
+df = pd.DataFrame(test_data)
+df["mid_price"] = (df["best_bid"] + df["best_ask"]) / 2
+venv = setup_venv(
+    df,
+    obs_space=LinearObservation(
+        LinearObservationSpaces.OnlyInventorySpace,
+    ),
+    env_params={"max_ticks": 30},
+)
+venv.reset()
+callback = ExternalMeasureCallback(df.to_numpy(), venv, wait=2, freq=1, patience=1)
+
+
+class Helper:
+    """
+    Build a helper class that looks like the model that callback sees but
+    returns predetermined values when calling .predict()
+    """
+
+    def __init__(self, values) -> None:
+        self.values = values
+        self.current_step = 0
+
+    def predict(self, obs, deterministic=False):
+        self.current_step += 1
+        return np.array([self.values[self.current_step - 1]])
+
+
+def test_get_performance_ok__single():
+    metrics = {
+        "sharpe": np.array([0.5]),
+        "max_inventory": np.array([0.5]),
+    }
+    performance_metric = callback.get_performance(metrics)
+    assert performance_metric == 0.5
+
+
+def test_get_performance_liquidated_single():
+    metrics = {
+        "sharpe": np.array([2]),
+        "max_inventory": np.array([1]),
+    }
+    performance_metric = callback.get_performance(metrics)
+    assert performance_metric == 0
+
+
+def test_get_performance_ok_multiple():
+    metrics = {
+        "sharpe": np.array([2, 0.5]),
+        "max_inventory": np.array([0.5, 0.5]),
+    }
+    performance_metric = callback.get_performance(metrics)
+    assert performance_metric == 0.5
+
+
+def test_get_performance_liquidated_multiple():
+    metrics = {
+        "sharpe": np.array([2, 0.5]),
+        "max_inventory": np.array([1, 0.5]),
+    }
+    performance_metric = callback.get_performance(metrics)
+    assert performance_metric == 0
+
+
+def test_external_measure_callback(caplog):
+    # caplog.set_level(logging.DEBUG)
+    venv = setup_venv(
+        df,
+        obs_space=LinearObservation(
+            LinearObservationSpaces.OnlyInventorySpace,
+        ),
+        env_params={"max_ticks": 30},
+    )
+    venv.reset()
+    callback = ExternalMeasureCallback(df.to_numpy(), venv, wait=2, freq=1, patience=1)
+    good_action = np.array([1, 1, -1, 1])
+    no_trades_action = np.array([0, 0, -1, 1])
+    bad_action = np.array([1, 1, 1, -1])
+    helper = Helper([good_action, good_action, good_action])
+    callback.__setattr__("locals", {"self": helper})
+
+    callback._on_rollout_end()
+    assert callback.eval_count == 1
+    callback._on_rollout_end()
+    callback._on_rollout_end()
