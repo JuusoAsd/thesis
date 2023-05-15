@@ -31,7 +31,9 @@ class PnLReward(BaseRewardClass):
     def end_step(self):
         self.value_end = self.env._get_value()
         profit = self.value_end - self.value_start
-        inventory_is_high = (np.abs(self.env.norm_inventory) > 0.8)[0]
+        print(profit)
+        print(self.env.norm_inventory > 0.8)
+        inventory_is_high = np.abs(self.env.norm_inventory) > 0.8
 
         profit -= inventory_is_high * 100
         return profit

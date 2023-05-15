@@ -171,16 +171,9 @@ class ASPolicyVec:
         return self.get_action_no_mid_no_size(np.array(obs).T)
 
     def get_action_no_mid_linear(self, observation):
-        obs_dict = {
-            "inventory": observation[:, 0],
-            "volatility": observation[:, 1],
-            "intensity": observation[:, 2],
-        }
-        obs_dict_converted = self.obs_type.convert_to_readable(obs_dict)
-        obs = []
-        for i in ["inventory", "volatility", "intensity"]:
-            obs.append(obs_dict_converted[i])
-        return self.get_action_no_mid(np.array(obs).T)
+        obs_dict_converted = self.obs_type.convert_to_readable(observation)
+        print(obs_dict_converted)
+        return self.get_action_no_mid(obs_dict_converted)
 
     def get_action_func(self):
         if isinstance(self.obs_type, ObservationSpace):

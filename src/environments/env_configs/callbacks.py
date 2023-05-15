@@ -31,6 +31,7 @@ class ExternalMeasureCallback(BaseCallback):
         time_data_portion=0.5,
         inv_jump=0.18,
         verbose: int = 0,
+        eval_mode="min_sharpe",
     ):
         super(ExternalMeasureCallback, self).__init__(verbose)
         self.data = data
@@ -53,6 +54,7 @@ class ExternalMeasureCallback(BaseCallback):
         self.improvement_thresh = improvement_thresh
         self.eval_count = 0
         self.continue_training = True
+        self.eval_mode = eval_mode
         if initial_expert:
             self.get_expert_performance()
         else:
@@ -157,7 +159,7 @@ class ExternalMeasureCallback(BaseCallback):
                 mean_performance_metrics = {
                     k: np.mean(v) for k, v in performance_metrics.items()
                 }
-                print(
+                logging.debug(
                     f"Evals: {self.eval_count}, patience: {self.patience} agent reward: {agent_reward}, best reward: {self.best_reward}, {mean_performance_metrics}"
                 )
 
@@ -170,14 +172,18 @@ class ExternalMeasureCallback(BaseCallback):
         return True
 
     def get_performance(self, metrics):
-        print("sharpe", metrics["sharpe"])
-        is_liquidated = np.max(metrics["max_inventory"]) > 0.99
-        print(f"is_liquidated: {is_liquidated}")
-        aggregate = np.min(
-            [metrics["sharpe"], metrics["sharpe"] * (1 - is_liquidated)], axis=0
-        )
-        print(f"aggregate: {aggregate}")
-        return np.mean(aggregate)
+        if self.eval_mode == "min_sharpe":
+            is_liquidated = metrics["max_inventory"] > 0.99
+            aggregate = np.minimum(
+                metrics["sharpe"], metrics["sharpe"] * (1 - is_liquidated)
+            )
+            return np.min(aggregate)
+        elif self.eval_mode == "mean_sharpe":
+            is_liquidated = metrics["max_inventory"] > 0.99
+            aggregate = np.mean(
+                [metrics["sharpe"], metrics["sharpe"] * (1 - is_liquidated)]
+            )
+            return aggregate
 
 
 class GroupRewardCallback(tune.Callback):

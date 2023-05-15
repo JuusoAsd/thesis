@@ -93,52 +93,143 @@ class LinearObservationSpaces(Enum):
     # enum for different possible observation spaces
     # keys must be found in the environment
     OnlyInventorySpace = {
-        "inventory": {"min": -1, "max": 1, "min_actual": -2, "max_actual": 2},
+        "inventory": {
+            "min": -1,
+            "max": 1,
+            "min_actual": -2,
+            "max_actual": 2,
+            "external": False,
+        },
     }
     SimpleLinearSpace = {
-        "inventory": {"min": -1, "max": 1, "min_actual": -2, "max_actual": 2},
-        "volatility": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 0.01},
-        "intensity": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 100_000},
+        "inventory": {
+            "min": -1,
+            "max": 1,
+            "min_actual": -2,
+            "max_actual": 2,
+            "external": False,
+        },
+        "volatility": {
+            "min": -1,
+            "max": 1,
+            "min_actual": 0,
+            "max_actual": 0.01,
+            "external": True,
+        },
+        "intensity": {
+            "min": -1,
+            "max": 1,
+            "min_actual": 0,
+            "max_actual": 100_000,
+            "external": True,
+        },
     }
 
     OSILinearSpace = {
-        "inventory": {"min": -1, "max": 1, "min_actual": -2, "max_actual": 2},
-        "volatility": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 0.01},
-        "intensity": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 100_000},
-        "osi": {"min": -1, "max": 1, "min_actual": -100, "max_actual": 100},
+        "inventory": {
+            "min": -1,
+            "max": 1,
+            "min_actual": -2,
+            "max_actual": 2,
+            "external": False,
+        },
+        "volatility": {
+            "min": -1,
+            "max": 1,
+            "min_actual": 0,
+            "max_actual": 0.01,
+            "external": True,
+        },
+        "intensity": {
+            "min": -1,
+            "max": 1,
+            "min_actual": 0,
+            "max_actual": 100_000,
+            "external": True,
+        },
+        "osi": {
+            "min": -1,
+            "max": 1,
+            "min_actual": -100,
+            "max_actual": 100,
+            "external": True,
+        },
     }
 
     EverythingLinearSpace = {
-        "inventory": {"min": -1, "max": 1, "min_actual": -2, "max_actual": 2},
-        "volatility": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 0.01},
-        "intensity": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 100_000},
-        "osi": {"min": -1, "max": 1, "min_actual": -100, "max_actual": 100},
+        "inventory": {
+            "min": -1,
+            "max": 1,
+            "min_actual": -2,
+            "max_actual": 2,
+            "external": False,
+        },
+        "volatility": {
+            "min": -1,
+            "max": 1,
+            "min_actual": 0,
+            "max_actual": 0.01,
+            "external": True,
+        },
+        "intensity": {
+            "min": -1,
+            "max": 1,
+            "min_actual": 0,
+            "max_actual": 100_000,
+            "external": True,
+        },
+        "osi": {
+            "min": -1,
+            "max": 1,
+            "min_actual": -100,
+            "max_actual": 100,
+            "external": True,
+        },
         "order_book_imbalance": {
             "min": -1,
             "max": 1,
             "min_actual": -1,
             "max_actual": 1,
+            "external": True,
         },
-        "current_second": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 60},
-        "current_minute": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 60},
-        "current_hour": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 24},
+        "current_second": {
+            "min": -1,
+            "max": 1,
+            "min_actual": 0,
+            "max_actual": 60,
+            "external": True,
+        },
+        "current_minute": {
+            "min": -1,
+            "max": 1,
+            "min_actual": 0,
+            "max_actual": 60,
+            "external": True,
+        },
+        "current_hour": {
+            "min": -1,
+            "max": 1,
+            "min_actual": 0,
+            "max_actual": 24,
+            "external": True,
+        },
     }
 
 
 class LinearObservation:
-    def __init__(
-        self,
-        obs_info_dict={
-            "volatility": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 50},
-        },
-        n_env=1,
-    ):
+    """
+    numpy version of previous linear observation space
+    NOTE: be very very careful with ordering of items in input arrays
+    """
+
+    def __init__(self, obs_info_dict, n_env=1):
         if type(obs_info_dict) == LinearObservationSpaces:
             obs_info_dict = obs_info_dict.value
         lows = []
         highs = []
 
         self.func_dict = {}
+        self.external = []
         for k, v in obs_info_dict.items():
             for i in ["min", "max", "min_actual", "max_actual"]:
                 if i not in v:
@@ -156,6 +247,20 @@ class LinearObservation:
                 "min_actual": np.full(n_env, v["min_actual"]),
                 "max_actual": np.full(n_env, v["max_actual"]),
             }
+            if v["external"]:
+                self.external.append(k)
+        self.slopes = np.array([self.func_dict[k]["slope"] for k in self.func_dict])
+        self.intercepts = np.array(
+            [self.func_dict[k]["intercept"] for k in self.func_dict]
+        )
+        self.mins = np.array([self.func_dict[k]["min"] for k in self.func_dict])
+        self.maxs = np.array([self.func_dict[k]["max"] for k in self.func_dict])
+        self.mins_actual = np.array(
+            [self.func_dict[k]["min_actual"] for k in self.func_dict]
+        )
+        self.maxs_actual = np.array(
+            [self.func_dict[k]["max_actual"] for k in self.func_dict]
+        )
 
         self.obs_space = spaces.Box(
             low=np.float32(np.array(lows)),
@@ -163,32 +268,89 @@ class LinearObservation:
             dtype=np.float32,
         )
 
-    def convert_to_readable(self, obs_dict={"volatility": 50}):
-        # convert from normalized to actual
-        actual_obs = {}
-        for k, v in obs_dict.items():
-            calculated_value = (
-                self.func_dict[k]["slope"] * v + self.func_dict[k]["intercept"]
-            )
-
-            actual_obs[k] = np.minimum(
-                np.maximum(calculated_value, self.func_dict[k]["min_actual"]),
-                self.func_dict[k]["max_actual"],
-            )
-        return actual_obs
-
-    def convert_to_normalized(self, obs_dict={"volatility": 0.2}):
+    def convert_to_normalized(self, obs_array):
         # convert from actual to normalized
-        normalized_obs = {}
-        for obs_type, value in obs_dict.items():
-            calculated_value = (
-                value - self.func_dict[obs_type]["intercept"]
-            ) / self.func_dict[obs_type]["slope"]
-            normalized_obs[obs_type] = np.minimum(
-                np.maximum(calculated_value, self.func_dict[obs_type]["min"]),
-                self.func_dict[obs_type]["max"],
-            )
-        obs_list = []
-        for k, v in normalized_obs.items():
-            obs_list.append(v)
-        return np.concatenate(obs_list).T
+        calculated_values = (obs_array - self.intercepts) / self.slopes
+        normalized_obs = np.minimum(np.maximum(calculated_values, self.mins), self.maxs)
+        return normalized_obs
+
+    def convert_to_readable(self, obs_array):
+        # convert from normalized to actual
+        calculated_values = self.slopes * obs_array + self.intercepts
+        # NOTE: no clipping done here because we want to see the actual values
+        # actual_obs = np.minimum(
+        #     np.maximum(calculated_values, self.mins_actual.T), self.maxs_actual.T
+        # )
+        return calculated_values
+
+    def get_correct_order(self):
+        return list(self.func_dict.keys())
+
+
+# class LinearObservationOld:
+#     def __init__(
+#         self,
+#         obs_info_dict={
+#             "volatility": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 50},
+#         },
+#         n_env=1,
+#     ):
+#         if type(obs_info_dict) == LinearObservationSpaces:
+#             obs_info_dict = obs_info_dict.value
+#         lows = []
+#         highs = []
+
+#         self.func_dict = {}
+#         for k, v in obs_info_dict.items():
+#             for i in ["min", "max", "min_actual", "max_actual"]:
+#                 if i not in v:
+#                     raise ValueError(f"Missing {i} in obs_info_dict for {k}")
+#             lows.append(v["min"])
+#             highs.append(v["max"])
+#             slope = (v["max_actual"] - v["min_actual"]) / (v["max"] - v["min"])
+#             intercept = v["min_actual"] - slope * v["min"]
+
+#             self.func_dict[k] = {
+#                 "intercept": intercept,
+#                 "slope": slope,
+#                 "min": v["min"],
+#                 "max": v["max"],
+#                 "min_actual": np.full(n_env, v["min_actual"]),
+#                 "max_actual": np.full(n_env, v["max_actual"]),
+#             }
+
+#         self.obs_space = spaces.Box(
+#             low=np.float32(np.array(lows)),
+#             high=np.float32(np.array(highs)),
+#             dtype=np.float32,
+#         )
+
+#     def convert_to_readable(self, obs_dict={"volatility": 50}):
+#         # convert from normalized to actual
+#         actual_obs = {}
+#         for k, v in obs_dict.items():
+#             calculated_value = (
+#                 self.func_dict[k]["slope"] * v + self.func_dict[k]["intercept"]
+#             )
+
+#             actual_obs[k] = np.minimum(
+#                 np.maximum(calculated_value, self.func_dict[k]["min_actual"]),
+#                 self.func_dict[k]["max_actual"],
+#             )
+#         return actual_obs
+
+#     def convert_to_normalized(self, obs_dict={"volatility": 0.2}):
+#         # convert from actual to normalized
+#         normalized_obs = {}
+#         for obs_type, value in obs_dict.items():
+#             calculated_value = (
+#                 value - self.func_dict[obs_type]["intercept"]
+#             ) / self.func_dict[obs_type]["slope"]
+#             normalized_obs[obs_type] = np.minimum(
+#                 np.maximum(calculated_value, self.func_dict[obs_type]["min"]),
+#                 self.func_dict[obs_type]["max"],
+#             )
+#         obs_list = []
+#         for k, v in normalized_obs.items():
+#             obs_list.append(v)
+#         return np.concatenate(obs_list).T

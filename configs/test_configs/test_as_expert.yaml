@@ -8,8 +8,8 @@ env:
       action_space: NormalizedAction
       observation_space: 
         type: "linear"
-        params: EverythingLinearSpace
-    reward_space: inventory_integral_penalty 
+        params: SimpleLinearSpace
+    reward_space: pnl 
     params:
       inv_envs: 1
       time_envs: 1
@@ -22,8 +22,8 @@ env_parallel:
       action_space: NormalizedAction
       observation_space: 
         type: "linear"
-        params: EverythingLinearSpace
-    reward_space: inventory_integral_penalty 
+        params: SimpleLinearSpace
+    reward_space: pnl 
     params:
       inv_envs: 2
       time_envs: 1
@@ -45,7 +45,7 @@ test_2_env:
     observation_space: 
       type: "linear"
       params: EverythingLinearSpace
-  reward_space: inventory_integral_penalty 
+  reward_space: pnl 
   params:
     n_envs: 2
     use_copy_envs: true
