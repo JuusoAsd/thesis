@@ -102,13 +102,7 @@ def trained_vs_manual(venv, model, save_values=False, result_file="", date=""):
         n_steps += 1
         if done_expert:
             break
-        print(f"{expert_venv.env.current_step} - {done_expert}")
-        # print(
-        #     f"{venv.env.current_step} - {done_model} - {expert_venv.env.current_step} - {done_expert}"
-        # )
-        # print(f"model obs: {obs_model} act: {action_model}")
-        # print(f"model inv: {venv.env.inventory_qty}")
-        # print(f"expert inv: {expert_venv.env.inventory_qty}")
+
 
     # metrics = venv.env.get_metrics()
     # if metrics["max_inventory"] == 0:

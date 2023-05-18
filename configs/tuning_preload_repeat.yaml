@@ -2,6 +2,7 @@
 # ----------SETUP----------
 run_name: preload_repeat
 samples: 1000
+trial_run: True
 
 reporter: 
   parameter_columns: ["env.reward_space", "clone", "model.policy_kwargs.net_arch"]
@@ -17,6 +18,7 @@ reporter:
   sort_metric: "group_reward"
   report_frequency: 60 # seconds
   report_rows: 30
+  mode: min
 searcher:
   repeats: 8
   metric: "group_reward" # what metric searcher optimizes for

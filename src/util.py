@@ -210,6 +210,10 @@ def locked_write_dataframe_to_csv(trial_name, filename, dataframe):
         dataframe.to_csv(path, mode="a", header=header, index=False)
 
 
+def trial_namer(trial):
+    return f"{trial.trainable_name}_{trial.trial_id}"
+
+
 if __name__ == "__main__":
     # config = get_config("test_yaml")
     # print(config)

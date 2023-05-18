@@ -437,9 +437,6 @@ def cloning_v2():
 
 
 def cloning_multiple_envs():
-    from omegaconf import OmegaConf
-    import time
-
     config = get_config("clone_config_multiple")
     venv = setup_venv_config(config.clone_data, config.env, config.venv)
     cloning_duration = CloneDuration.Short

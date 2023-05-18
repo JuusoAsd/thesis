@@ -1,3 +1,8 @@
+import os
+import sys
+
+sys.path.append(f"{os.getcwd()}/gradu")
+
 import logging
 import numpy as np
 import pandas as pd
@@ -54,7 +59,7 @@ if __name__ == "__main__":
     }
 
     try:
-        func = func_dict[args.method]
+        func = func_dict[args.method]()
     except KeyError as e:
         raise (
             f"Unknown method: {args.method}. Please choose either from {list(func_dict.keys())}"
