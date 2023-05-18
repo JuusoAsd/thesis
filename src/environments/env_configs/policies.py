@@ -172,7 +172,6 @@ class ASPolicyVec:
 
     def get_action_no_mid_linear(self, observation):
         obs_dict_converted = self.obs_type.convert_to_readable(observation)
-        print(obs_dict_converted)
         return self.get_action_no_mid(obs_dict_converted)
 
     def get_action_func(self):
@@ -217,7 +216,7 @@ class ASPolicyVec:
 
 
 def convert_continuous_action(env, action):
-    logging.debug(f"continuous action input: {action}")
+    # logging.debug(f"continuous action input: {action}")
     # this is not fully continuous but uses float and looks like one
     bid_sizes = np.round(action[:, 0] * env.max_order_size)
     ask_sizes = np.round(action[:, 1] * env.max_order_size)
@@ -235,9 +234,9 @@ def convert_continuous_action(env, action):
     # asks = action[:, 3] * env.max_ticks * env.tick_size
     # bids_round = np.round(env.mid_price[env.current_step] + bids, env.price_decimals)
     # asks_round = np.round(env.mid_price[env.current_step] + asks, env.price_decimals)
-    logging.debug(
-        f"continuous action output: {bid_sizes, ask_sizes, bid_round, ask_round}"
-    )
+    # logging.debug(
+    #     f"continuous action output: {bid_sizes, ask_sizes, bid_round, ask_round}"
+    # )
     return bid_sizes, ask_sizes, bid_round, ask_round
 
 

@@ -73,7 +73,7 @@ def test_trained_model(venv, model):
     print(f"Metrics: {venv.env.get_metrics()}")
 
 
-def test_trained_vs_manual(venv, model, save_values=False, result_file="", date=""):
+def trained_vs_manual(venv, model, save_values=False, result_file="", date=""):
     expert_venv = copy.deepcopy(venv)
     expert_policy = ASPolicyVec
     expert_params = {
@@ -92,27 +92,31 @@ def test_trained_vs_manual(venv, model, save_values=False, result_file="", date=
     obs_expert = expert_venv.reset()
     done = False
     n_steps = 0
-    while not np.any(done):
+    while True:
         action_model = model.predict(obs_model, deterministic=True)[0]
         action_expert = action_func(obs_expert)
 
-        obs_model, _, done, _ = venv.step(action_model)
-        obs_expert, _, done, _ = expert_venv.step(action_expert)
+        obs_model, _, done_model, _ = venv.step(action_model)
+        obs_expert, _, done_expert, _ = expert_venv.step(action_expert)
 
         n_steps += 1
+        if done_expert:
+            break
+        print(f"{expert_venv.env.current_step} - {done_expert}")
+        # print(
+        #     f"{venv.env.current_step} - {done_model} - {expert_venv.env.current_step} - {done_expert}"
+        # )
         # print(f"model obs: {obs_model} act: {action_model}")
         # print(f"model inv: {venv.env.inventory_qty}")
         # print(f"expert inv: {expert_venv.env.inventory_qty}")
 
-    metrics = venv.env.get_metrics()
-    if metrics["max_inventory"] == 0:
-        logging.error("Zero inventory run")
-        return
+    # metrics = venv.env.get_metrics()
+    # if metrics["max_inventory"] == 0:
+    #     logging.error("Zero inventory run")
+    #     return
 
     model_metrics = venv.env.get_metrics_val()
     expert_metrics = expert_venv.env.get_metrics_val()
-    print(f"Model: {model_metrics}")
-    print(f"Expert: {expert_metrics} \n")
     if save_values:
         if date == "":
             raise ValueError("Date must be specified when saving")

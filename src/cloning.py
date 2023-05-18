@@ -26,7 +26,7 @@ from src.environments.env_configs.spaces import (
     LinearObservation,
 )
 
-from src.model_testing import test_trained_vs_manual
+from src.model_testing import trained_vs_manual
 from src.data_management import get_data_by_dates
 from src.util import get_model_hash
 from src.util import get_config, create_config_hash
@@ -148,7 +148,7 @@ def clone_expert_config(config, venv, student_model, transitions):
             progress_bar=False
             # on_batch_end=eval_callback,
         )
-        model_res, expert_res = test_trained_vs_manual(venv.clone_venv(), student_model)
+        model_res, expert_res = trained_vs_manual(venv.clone_venv(), student_model)
         if (
             expert_res["trades"] * (1 - config.cloning.tolerance)
             < model_res["trades"]
@@ -248,7 +248,6 @@ def clone_bc(venv, expert_trainer, student_model, duration, model_name, testing=
     )
 
     transitions = rollout.flatten_trajectories(rollouts)
-
     if testing:
         n = 0
         all_val = []
@@ -465,7 +464,7 @@ def cloning_multiple_envs():
         single_venv = venv.clone_venv(
             get_data_by_dates(**config.verify_cloning_data).to_numpy()
         )
-        test_trained_vs_manual(single_venv, model, False)
+        trained_vs_manual(single_venv, model, False)
         print(f"DONE, took {round((time.time() - start_time)/60,2)} minutes\n")
 
 

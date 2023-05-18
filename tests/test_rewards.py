@@ -22,10 +22,11 @@ from numpy.testing import assert_allclose
 
 class MockEnv:
     def __init__(self):
-        self.norm_inventory = None
-
-    def _get_value(self):
-        pass  # This method will be mocked later
+        self._get_value = MagicMock()
+        self.values = []
+        self.norm_inventory = np.array([])
+        self.spread = np.array([])
+        self.n_envs = 2
 
 
 class TestPnLReward(unittest.TestCase):
@@ -114,4 +115,50 @@ class TestAssymetricPnLDampening(unittest.TestCase):
         self.assertEqual(reward.value_start.tolist(), [100, 100, 100])
 
         expected = [8.88888889, 7.44601638, -4.21631001]
+        assert_allclose(reward.end_step(), expected)
+
+
+logger = logging.getLogger(__name__)
+
+
+class TestRewards(unittest.TestCase):
+    def test_multistep_pnl(self):
+        env = MockEnv()
+        env.values = [100, 110, 120]
+        env.norm_inventory = np.array([0.5, 0.9])
+        reward = MultistepPnl(env)
+        expected = np.array([20, 20]) - np.array([0, 100])
+        assert_allclose(reward.end_step(), expected)
+
+    def test_inventory_integral_penalty(self):
+        env = MockEnv()
+        env.values = [100, 110, 120]
+        env.norm_inventory = np.array([0.5, 0.9])
+        reward = InventoryIntegralPenalty(env)
+        # Add your expected value for this class and assert it similar to the above test.
+        # expected = ...
+        # assert_allclose(reward.end_step(), expected)
+
+    def test_simple_inventory_pnl_reward(self):
+        env = MockEnv()
+        env._get_value = MagicMock(
+            side_effect=[
+                np.array([100, 100]),
+                np.array([110, 110]),
+            ]
+        )
+        env.norm_inventory = np.array([0.5, 1])
+        reward = SimpleInventoryPnlReward(env)
+        reward.start_step()
+        assert_allclose(reward.value_start, np.array([100, 100]))
+        expected = np.array([2 / 3 * 10, -95])
+        assert_allclose(reward.end_step(), expected)
+
+    def test_spread_pnl_reward(self):
+        logger.setLevel(logging.DEBUG)
+        env = MockEnv()
+        env.spread = np.array([10, 20])
+        env.norm_inventory = np.array([0.5, 1]).reshape(-1, 1)
+        reward = SpreadPnlReward(env)
+        expected = np.array([2 / 3 * 10, -90]).reshape(-1, 1)
         assert_allclose(reward.end_step(), expected)

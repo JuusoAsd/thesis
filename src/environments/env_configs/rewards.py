@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 import numpy as np
 
@@ -31,8 +32,6 @@ class PnLReward(BaseRewardClass):
     def end_step(self):
         self.value_end = self.env._get_value()
         profit = self.value_end - self.value_start
-        print(profit)
-        print(self.env.norm_inventory > 0.8)
         inventory_is_high = np.abs(self.env.norm_inventory) > 0.8
 
         profit -= inventory_is_high * 100
@@ -124,13 +123,14 @@ class InventoryIntegralPenalty(BaseRewardClass):
         # check that env has n_envs attribute
         if not hasattr(self.env, "n_envs"):
             raise AttributeError("env must have n_envs attribute")
-        self.accumulated_inventory = np.array(self.env.n_envs * [0])
+        self.accumulated_inventory = np.full((self.env.n_envs, 1), 0.0)
 
     def start_step(self):
         pass
 
     def end_step(self):
         # Increase penalty for inventory over time
+
         inventory = self.env.norm_inventory
         penalize = inventory > self.penalty_limit
 
@@ -166,11 +166,12 @@ class InventoryIntegralPenalty(BaseRewardClass):
         reward = is_positive * (returns / inventory_penalty) + (1 - is_positive) * (
             returns * inventory_penalty
         )
-        # print(f"inventory: {inventory}")
-        # print(f"accumulated_inventory: {self.accumulated_inventory}")
-
-        # print()
-        # time.sleep(0.5)
+        # logging.debug(
+        #     f"inventory: {self.env.norm_inventory}, {self.env.norm_inventory.shape}"
+        # )
+        # logging.debug(f"returns: {returns}, {returns.shape}")
+        # logging.debug(f"accumulated_inventory: {self.accumulated_inventory}")
+        # logging.debug(f"reward: {reward}, {reward.shape}")
         return reward
 
 
@@ -202,10 +203,9 @@ class SpreadPnlReward(BaseRewardClass):
         pass
 
     def end_step(self):
-        spread = self.env.spread
+        spread = self.env.spread.reshape(-1, 1)
         inventory = np.abs(self.env.norm_inventory)
         inventory_is_high = np.abs(self.env.norm_inventory) > 0.8
-
         return spread / (1 + inventory) - inventory_is_high * 100
 
 

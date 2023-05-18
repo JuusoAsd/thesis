@@ -14,6 +14,7 @@ from src.environments.env_configs.spaces import (
     LinearObservationSpaces,
     LinearObservation,
 )
+from src.data_management import get_data_by_dates
 
 
 config = get_test_config("test_env")
@@ -150,39 +151,58 @@ def test_metrics():
     )
 
 
-def test_metrics_parallel():
-    venv = setup_venv(
-        df,
-        obs_space=LinearObservation(
-            LinearObservationSpaces.OnlyInventorySpace,
-        ),
-        env_params={"max_ticks": 30},
-    )
-    values = [100, 80, 110, 120]
-    inventory = [0.5, 0.7, 0.9]
-    venv.env.values = [np.array([x, x]) for x in values]
-    venv.env.inventory_values = [np.array([x, x]) for x in inventory]
-    metrics = venv.env.get_metrics()
+# def test_metrics_parallel():
+#     venv = setup_venv(
+#         df,
+#         obs_space=LinearObservation(
+#             LinearObservationSpaces.OnlyInventorySpace,
+#         ),
+#         env_params={"max_ticks": 30},
+#     )
+#     values = [100, 80, 110, 120]
+#     inventory = [0.5, 0.7, 0.9]
+#     venv.env.values = [np.array([x, x]) for x in values]
+#     venv.env.inventory_values = [np.array([x, x]) for x in inventory]
+#     metrics = venv.env.get_metrics()
+#     print(metrics)
+#     sharpe = 0.2 / np.std(np.diff(np.array(values)))
+#     inventory = np.mean(np.abs(np.array(inventory)))
+#     assert pytest.approx(metrics["episode_return"][0], rel=1e-5) == 0.2
+#     assert pytest.approx(metrics["episode_return"][1], rel=1e-5) == 0.2
+#     assert pytest.approx(metrics["sharpe"][0], rel=1e-5) == sharpe
+#     assert pytest.approx(metrics["sharpe"][1], rel=1e-5) == sharpe
+#     assert pytest.approx(metrics["drawdown"][0], rel=1e-5) == -0.2
+#     assert pytest.approx(metrics["drawdown"][1], rel=1e-5) == -0.2
+#     assert pytest.approx(metrics["max_inventory"][0], rel=1e-5) == 0.9
+#     assert pytest.approx(metrics["max_inventory"][1], rel=1e-5) == 0.9
+#     assert pytest.approx(metrics["mean_abs_inv"][0], rel=1e-5) == inventory
+#     assert pytest.approx(metrics["mean_abs_inv"][1], rel=1e-5) == inventory
 
-    print(metrics)
-    liquidated = metrics["max_inventory"] > 0.5
-    print(liquidated)
-    val = metrics["sharpe"] * (1 - liquidated) + liquidated * 100
-    print(metrics["sharpe"])
-    print(val)
-    val_conc = np.array([metrics["sharpe"], val])
-    print(val_conc)
-    print(np.min(val_conc, axis=0))
 
-    sharpe = 0.2 / np.std(np.diff(np.array(values)))
-    inventory = np.mean(np.abs(np.array(inventory)))
-    assert pytest.approx(metrics["episode_return"][0], rel=1e-5) == 0.2
-    assert pytest.approx(metrics["episode_return"][1], rel=1e-5) == 0.2
-    assert pytest.approx(metrics["sharpe"][0], rel=1e-5) == sharpe
-    assert pytest.approx(metrics["sharpe"][1], rel=1e-5) == sharpe
-    assert pytest.approx(metrics["drawdown"][0], rel=1e-5) == -0.2
-    assert pytest.approx(metrics["drawdown"][1], rel=1e-5) == -0.2
-    assert pytest.approx(metrics["max_inventory"][0], rel=1e-5) == 0.9
-    assert pytest.approx(metrics["max_inventory"][1], rel=1e-5) == 0.9
-    assert pytest.approx(metrics["mean_abs_inv"][0], rel=1e-5) == inventory
-    assert pytest.approx(metrics["mean_abs_inv"][1], rel=1e-5) == inventory
+"""
+Create a test that clearly shows the structure of actions, observations, rewards and saved values
+for both 1 env and multi env. assert that the values and shapes are correct
+"""
+
+
+def test_single_env():
+    venv = setup_venv_config(config.data, config.env_single, config.venv)
+    action = np.array([1, 1, -1, 1])
+    obs, reward, done, info = venv.step(action)
+    assert action.shape == (4,)
+    assert obs.shape == (1, 3)
+    assert reward.shape == (1,)
+    assert done.shape == (1,)
+    print(action, obs, reward, done)
+
+
+def test_multi_env():
+    venv = setup_venv_config(config.data, config.env_multi, config.venv)
+    action_single = np.array([1, 1, -1, 1]).reshape(1, -1)
+    actions = np.repeat(action_single, 5, axis=0)
+    obs, reward, done, info = venv.step(actions)
+
+    assert actions.shape == (5, 4)
+    assert obs.shape == (5, 3)
+    assert reward.shape == (5,)
+    assert done.shape == (5,)

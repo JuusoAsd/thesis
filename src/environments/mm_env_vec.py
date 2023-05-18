@@ -12,6 +12,7 @@ from src.environments.env_configs.spaces import (
     ObservationSpace,
     LinearObservation,
 )
+from stable_baselines3.common.vec_env import VecEnv
 
 
 class MMVecEnv(gym.Env):
@@ -225,7 +226,7 @@ class MMVecEnv(gym.Env):
             if is_dones[i]:
                 info[i] = dict(terminal_observation=obs[i])
 
-        logging.debug(f"Reward: {reward}, {reward.shape}")
+        # # logging.debug(f"Reward: {reward}, {reward.shape}")
 
         return (
             obs,
@@ -249,9 +250,9 @@ class MMVecEnv(gym.Env):
 
         self.inventory_qty += self.bid_sizes * execute_buy
         self.quote -= self.best_ask[self.current_step] * self.bid_sizes * execute_buy
-        logging.debug(
-            f"market buy: {execute_buy}, qty: {self.bid_sizes},  price: {self.best_ask[self.current_step]}"
-        )
+        # logging.debug(
+        #     f"market buy: {execute_buy}, qty: {self.bid_sizes},  price: {self.best_ask[self.current_step]}"
+        # )
         self.bids = self.bids * (1 - execute_buy)
         self.bid_sizes = self.bid_sizes * (1 - execute_buy)
 
@@ -263,9 +264,9 @@ class MMVecEnv(gym.Env):
         )
         self.inventory_qty -= self.ask_sizes * execute_sell
         self.quote += self.best_bid[self.current_step] * self.ask_sizes * execute_sell
-        logging.debug(
-            f"market sell: {execute_sell}, qty: {self.ask_sizes},  price: {self.best_bid[self.current_step]}"
-        )
+        # logging.debug(
+        #     f"market sell: {execute_sell}, qty: {self.ask_sizes},  price: {self.best_bid[self.current_step]}"
+        # )
 
         self.asks = self.asks * (1 - execute_sell)
         self.ask_sizes = self.ask_sizes * (1 - execute_sell)
@@ -281,9 +282,9 @@ class MMVecEnv(gym.Env):
         )
         self.inventory_qty += self.bid_sizes * execute_buy
         self.quote -= self.bids * self.bid_sizes * execute_buy
-        logging.debug(
-            f"limit buy: {execute_buy}, qty: {self.bid_sizes}, price: {self.bids * self.bid_sizes}"
-        )
+        # logging.debug(
+        #     f"limit buy: {execute_buy}, qty: {self.bid_sizes}, price: {self.bids * self.bid_sizes}"
+        # )
         self.bids = self.bids * (1 - execute_buy)
         self.bid_sizes = self.bid_sizes * (1 - execute_buy)
 
@@ -295,49 +296,27 @@ class MMVecEnv(gym.Env):
         )
         self.inventory_qty -= self.ask_sizes * execute_sell
         self.quote += self.asks * self.ask_sizes * execute_sell
-        logging.debug(
-            f"limit sell: {execute_sell}, qty: {self.ask_sizes}, price: {self.asks * self.ask_sizes}"
-        )
+        # logging.debug(
+        #     f"limit sell: {execute_sell}, qty: {self.ask_sizes}, price: {self.asks * self.ask_sizes}"
+        # )
         self.asks = self.asks * (1 - execute_sell)
         self.ask_sizes = self.ask_sizes * (1 - execute_sell)
         self.trade_limit += execute_buy + execute_sell
         self.spread += sell_spread + buy_spread
 
     def _get_observation(self):
-        logging.debug(
-            f"inventory: {self.inventory_qty}, quote: {self.quote}, mid: {self.mid_price[self.current_step]}"
-        )
+        # logging.debug(
+        #     f"inventory: {self.inventory_qty}, quote: {self.quote}, mid: {self.mid_price[self.current_step]}"
+        # )
         self.norm_inventory = np.round(
             self.inventory_qty
             / (self.inventory_qty + self.quote / self.mid_price[self.current_step])
             - self.inventory_target
         ).reshape(-1, 1)
-
-        # self.norm_inventory = np.round(
-        #     (
-        #         (
-        #             self.inventory_qty
-        #             / (
-        #                 self.inventory_qty
-        #                 + self.quote / self.mid_price[self.current_step]
-        #             )
-        #             - self.inventory_target
-        #         )
-        #         .reshape(-1, 1)
-        #         .T
-        #     ),
-        #     4,
-        # )
         if isinstance(self.obs_space, LinearObservation):
-            # .reshape(-1, 1).T
             val = self.external_obs[self.current_step]
-            # print("inventory", self.norm_inventory, self.norm_inventory.shape)
-            # print("values", val, val.shape)
-            # all_vals = np.stack((self.norm_inventory, val))
             all_vals = np.concatenate((self.norm_inventory, val), axis=1)
-            # print(all_vals)
             norm = self.obs_space.convert_to_normalized(all_vals)
-            # print(norm)
             return norm
         # if isinstance(self.obs_space, LinearObservation):
         #     obs_dict = {"inventory": self.norm_inventory}
@@ -384,9 +363,9 @@ class MMVecEnv(gym.Env):
             bid,
             ask,
         )
-        logging.debug(
-            f"Applied: bid: {self.bid_sizes}@{bid}, ask: {self.ask_sizes}@{ask}"
-        )
+        # logging.debug(
+        #     f"Applied: bid: {self.bid_sizes}@{bid}, ask: {self.ask_sizes}@{ask}"
+        # )
 
     def _get_value(self):
         """
@@ -416,17 +395,16 @@ class MMVecEnv(gym.Env):
         inventory represents normalized inventory, roughly (inventory / (inventory + cash))
         """
         assert self.record_values, "Must set record_values to True to get metrics"
-        total_return = self.values[-1] / self.values[0] - 1  # VECTORIZE
-        drawdown = (self.values / np.maximum.accumulate(self.values, axis=0) - 1).min(
-            axis=0
-        )
-        volatility = np.std(np.diff(np.array(self.values)[:, 0]))  # VECTORIZE
+        values = np.array(self.values).reshape(-1, self.n_envs)
+        total_return = values[-1, :] / values[0, :] - 1  # VECTORIZE
+        drawdown = (values / np.maximum.accumulate(values, axis=0) - 1).min(axis=0)
+        volatility = np.std(np.diff(np.array(values)[:, 0]))  # VECTORIZE
 
         sharpe = total_return / volatility
         trades = self.trade_market + self.trade_limit
         max_inventory = np.max(np.abs(self.inventory_values), axis=0)
         values = {
-            "timesteps": len(self.values),
+            "timesteps": len(values),
             "episode_return": total_return,
             "sharpe": sharpe,
             "drawdown": drawdown,
@@ -471,9 +449,6 @@ class MMVecEnv(gym.Env):
         self.inventory_values = []
         self.trade_market = np.zeros(self.n_envs)
         self.trade_limit = np.zeros(self.n_envs)
-
-
-from stable_baselines3.common.vec_env import VecEnv
 
 
 class SBMMVecEnv(VecEnv):
