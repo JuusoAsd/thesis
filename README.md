@@ -18,3 +18,13 @@ Example:
 ### Indicator data
 - intensity:
 - vol
+
+
+### Commands
+- python -m src.scripts.timing
+- python -m cProfile -o output3.txt -s cumtime src/scripts/timing.py
+
+#### Triton
+start by connecting vpn (vpn1.aalto.fi)
+- ssh triton
+- rsync -avzc -e "ssh" hello.txt triton:/scratch/work/ahlrooj1/

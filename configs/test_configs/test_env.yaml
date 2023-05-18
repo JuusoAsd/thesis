@@ -22,3 +22,32 @@ env_trade:
   spaces:
       action_space: NormalizedAction
   
+
+# test_single_env
+env_single: 
+    spaces:
+      action_space: NormalizedAction
+      observation_space: 
+        type: "linear"
+        params: SimpleLinearSpace
+    reward_space: inventory_integral_penalty 
+    params:
+      inv_envs: 1
+      time_envs: 1
+      n_envs: 1
+      use_copy_envs: True
+
+# test_multi_env
+env_multi: 
+    spaces:
+      action_space: NormalizedAction
+      observation_space: 
+        type: "linear"
+        params: SimpleLinearSpace
+    reward_space: inventory_integral_penalty 
+    params:
+      inv_envs: 1
+      time_envs: 1
+      n_envs: 5
+      use_copy_envs: True
+

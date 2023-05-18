@@ -1,0 +1,33 @@
+# test_trade_size_price
+data:
+  start_date: "2021_12_24"
+  end_date: "2021_12_26"
+
+env: 
+    spaces:
+      action_space: NormalizedAction
+      observation_space: 
+        type: "linear"
+        params: EverythingLinearSpace
+    reward_space: inventory_integral_penalty 
+    params:
+      inv_envs: 1
+      time_envs: 1
+venv:
+    random: 1
+
+
+# test_execute_trade
+env_trade:
+  spaces:
+      action_space: NormalizedAction
+  
+
+expert_params:
+  max_order_size: 5
+  tick_size: 0.0001
+  max_ticks: 10
+  price_decimals: 4
+  inventory_target: 0
+  risk_aversion: 0.2
+  order_size: 1
