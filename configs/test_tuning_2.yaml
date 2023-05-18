@@ -1,0 +1,23 @@
+_imports:
+  - src.tuning_test
+
+defaults:
+  - hydra/sweeper: ray_tune
+
+hydra:
+  sweeper:
+    _target_: hydra_plugins.hydra_ray_tune_sweeper.RayTuneSweeper
+    search_space:
+      model.algo: choice(["PPO", "A2C"])
+      model.policy: "MlpPolicy"
+      model.model_params.PPO:
+        n_steps: choice([4, 8, 16, 32])
+        # Other PPO parameters...
+      model.model_params.A2C:
+        abc: choice([1, 2, 3])
+        # Other A2C parameters...
+      model.selected_params:
+        _target_: src.tuning_test.algo_params_sampler
+        config: ${}
+
+# Other config parameters...

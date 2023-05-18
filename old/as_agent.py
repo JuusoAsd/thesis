@@ -1,6 +1,6 @@
 import logging
 import numpy as np
-from src.environments.mm_env import AgentBaseClass, CurrentStateBaseClass
+from old.mm_env import AgentBaseClass, CurrentStateBaseClass
 from src.environments.util import Trade
 
 

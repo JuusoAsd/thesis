@@ -1,0 +1,31 @@
+model_params: 
+  n_steps: 16
+  batch_size: 4096
+  gae_lambda: 0.92
+  gamma: 0.995
+  learning_rate: 5.791490307962484e-05
+  max_grad_norm: 0.9
+  vf_coef: 0.0873730954927472
+  ent_coef: 0.4
+  clip_range: 0.1
+  clip_range_vf: 0.1
+  n_epochs: 10
+  normalize_advantage: 0.0
+  sde_sample_freq: 8
+
+start_date: "2021_12_31"
+initial_train_duration: 7
+start_date_callback: "2022_01_07"
+callback_duration: 5
+rolling_end_date: "2022_01_30"
+reward: InventoryIntegralPenalty
+
+callback_params:
+  init:
+    wait: 25
+    freq: 2
+    patience: 5
+  rolling:
+    wait: 25
+    freq: 2
+    patience: 3

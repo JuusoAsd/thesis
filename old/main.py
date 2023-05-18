@@ -1,7 +1,7 @@
 import logging
 from gym.wrappers.normalize import NormalizeObservation
 
-from src.environments.mm_env import MMEnv
+from old.mm_env import MMEnv
 from environments.env_configs.policies import AvellanedaStoikovPolicy, MLPolicy
 from src.environments.util import ASState
 from stable_baselines3.common.env_checker import check_env

@@ -1,98 +1,70 @@
-import numpy as np
-import os
+import logging
+from stable_baselines3.common.vec_env import VecNormalize
+
+from src.data_management import get_data_by_dates
+from src.environments.mm_env_vec import MMVecEnv, SBMMVecEnv
+from src.environments.env_configs.rewards import InventoryIntegralPenalty
+from src.environments.env_configs.spaces import (
+    ActionSpace,
+    LinearObservationSpaces,
+    LinearObservation,
+)
+from src.environments.env_configs.rewards import reward_dict
 
 
-class FileManager:
-    def __init__(self, folder_path, output_type=None, headers=True):
-        self.path = folder_path
-        self.headers = headers
-        self.create_output = output_type
-        if os.path.isdir(folder_path):
-            dir_files = os.listdir(self.path)
-            dir_files.sort()
-            self.files = []
-            for i in dir_files:
-                self.files.append(os.path.join(self.path, i))
-        else:
-            self.files = [folder_path]
-        ok = self.get_next_file()
-        if ok is False:
-            raise Exception("No files in folder")
-
-    def get_next_file(self):
-        if len(self.files) > 0:
-            self.iterator = iter(open(self.files.pop(0)))
-            if self.headers:
-                self.iterator.__next__()
-            return True
-        else:
-            return False
-
-    def get_next_event(self, start=False):
-        # try get the next line from current file
-        try:
-            val = next(self.iterator)
-        except StopIteration as e:
-            # print(e)
-            continues = self.get_next_file()
-            if not continues:
-                return None
-            val = next(self.iterator)
-        if self.create_output is None:
-            return val.rstrip().split(",")
-        else:
-            return self.create_output(val.rstrip().split(","))
+logger = logging.getLogger(__name__)
 
 
-class Trade:
-    def __init__(self, price, size):
-        self.price = price
-        self.size = size
+def setup_venv(
+    data,
+    obs_space=LinearObservation(LinearObservationSpaces.SimpleLinearSpace),
+    act_space=ActionSpace.NormalizedAction,
+    reward_class=InventoryIntegralPenalty,
+    normalize=False,
+    time_envs=1,
+    inv_envs=1,
+    env_params={},
+    venv_params={},
+):
+    column_mapping = {col: n for (n, col) in enumerate(data.columns)}
+    env = MMVecEnv(
+        data.to_numpy(),
+        observation_space=obs_space,
+        action_space=act_space,
+        column_mapping=column_mapping,
+        reward_class=reward_class,
+        time_envs=time_envs,
+        inv_envs=inv_envs,
+        **env_params,
+    )
+    venv = SBMMVecEnv(env, **venv_params)
+
+    if normalize:
+        venv = VecNormalize(venv, norm_obs=True, norm_reward=False, clip_obs=100_000)
+    return venv
 
 
-class CurrentState:
-    """
-    ts, mid_price, 25 best bids and asks with sizes
-    50 is best bid, 52 is best ask
-    """
+def setup_venv_config(data_config, env_config, venv_config):
+    logging.info(f"setting up venv")
+    data = get_data_by_dates(**data_config)
+    column_mapping = {col: n for (n, col) in enumerate(data.columns)}
+    action = ActionSpace[env_config.spaces.action_space]
+    if env_config.spaces.observation_space.type == "linear":
+        obs = LinearObservation(
+            LinearObservationSpaces[env_config.spaces.observation_space.params]
+        )
+    else:
+        raise NotImplementedError
 
-    def __init__(self, input_list):
-        self.timestamp = int(input_list[0])
-        self.best_bid = float(input_list[50])
-        self.best_ask = float(input_list[52])
+    reward = reward_dict[env_config.reward_space]
 
-    def set_trades(self, trades):
-        self.trades = trades
-
-
-class StateManager:
-    def __init__(self, trade_folder, orderbook_folder):
-        self.trades_manager = FileManager(trade_folder, Trade)
-        self.orderbook_manager = FileManager(orderbook_folder, CurrentState)
-        self.initialized = False
-
-    def get_next_state(self):
-        if not self.initialized:
-            self.initialized = True
-            return self.initialize()
-
-    def initialize(self):
-        """Want to make sure that the first trade is JUST before the first orderbook"""
-        current_ob = self.orderbook_manager.get_next_event()
-        current_trade = self.trades_manager.get_next_event()
-
-
-class ASState:
-    def __init__(self, input_list):
-        # bid, ask, trade price, trade size, vol, intensity
-        self.timestamp = float(input_list[0])
-        self.best_bid = float(input_list[1])
-        self.best_ask = float(input_list[2])
-        self.mid_price = (self.best_bid + self.best_ask) / 2
-        self.trade_price = float(input_list[3])
-        self.trade_size = float(input_list[4])
-        self.volatility = float(input_list[5])
-        self.intensity = float(input_list[6])
-
-    def get_observation(self):
-        return np.array([self.best_bid, self.best_ask, self.vol, self.intensity])
+    env = MMVecEnv(
+        data=data.to_numpy(),
+        column_mapping=column_mapping,
+        action_space=action,
+        observation_space=obs,
+        reward_class=reward,
+        **env_config.params,
+    )
+    venv = SBMMVecEnv(env, **venv_config)
+    return venv

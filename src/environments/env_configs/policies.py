@@ -1,7 +1,8 @@
 from abc import ABC
+import logging
 import numpy as np
 
-from environments.env_configs.spaces import (
+from src.environments.env_configs.spaces import (
     ActionSpace,
     ObservationSpace,
     LinearObservation,
@@ -38,7 +39,7 @@ class PolicyBase(ABC):
 class ASPolicyVec:
     def __init__(
         self,
-        env,
+        env,  # this should be the non-vectorized environment
         max_order_size,
         tick_size,
         max_ticks,
@@ -47,8 +48,6 @@ class ASPolicyVec:
         risk_aversion,
         order_size,
         max_diff=0.001,
-        obs_type=ObservationSpace.OSIObservation,
-        act_type=ActionSpace.NormalizedAction,
     ):
         self.env = env
         self.max_order_size = max_order_size
@@ -59,8 +58,8 @@ class ASPolicyVec:
         self.inventory_target = inventory_target
         self.risk_aversion = risk_aversion
         self.order_size = np.full(self.env.n_envs, order_size)
-        self.obs_type = obs_type
-        self.act_type = act_type
+        self.obs_type = env.obs_space
+        self.act_type = env.act_space
 
     def get_continuous_action(self, observation):
         """
@@ -171,8 +170,12 @@ class ASPolicyVec:
             obs.append(obs_dict_converted[i])
         return self.get_action_no_mid_no_size(np.array(obs).T)
 
+    def get_action_no_mid_linear(self, observation):
+        obs_dict_converted = self.obs_type.convert_to_readable(observation)
+        return self.get_action_no_mid(obs_dict_converted)
+
     def get_action_func(self):
-        if type(self.obs_type) == ObservationSpace:
+        if isinstance(self.obs_type, ObservationSpace):
             action_func_dict = {
                 (
                     ObservationSpace.OSIObservation,
@@ -192,11 +195,16 @@ class ASPolicyVec:
                 ): self.get_no_size_action_linear,
             }
             key = (self.obs_type, self.act_type)
-        elif type(self.obs_type) == LinearObservation:
+        elif isinstance(self.obs_type, LinearObservation):
             action_func_dict = {
                 ActionSpace.NoSizeAction: self.get_no_size_action_linear,
+                ActionSpace.NormalizedAction: self.get_action_no_mid_linear,
             }
             key = self.act_type
+        else:
+            raise NotImplementedError(
+                f"obs type not implemented for {self.obs_type}, type: {type(self.obs_type)}. Looking for either {LinearObservation} or {ObservationSpace}"
+            )
 
         try:
             func = action_func_dict[key]
@@ -208,9 +216,12 @@ class ASPolicyVec:
 
 
 def convert_continuous_action(env, action):
+    # logging.debug(f"continuous action input: {action}")
     # this is not fully continuous but uses float and looks like one
-    bid_sizes = np.full(env.n_envs, 1)
-    ask_sizes = np.full(env.n_envs, 1)
+    bid_sizes = np.round(action[:, 0] * env.max_order_size)
+    ask_sizes = np.round(action[:, 1] * env.max_order_size)
+    # bid_sizes = np.full(env.n_envs, 1)
+    # ask_sizes = np.full(env.n_envs, 1)
 
     bid_diff = action[:, 2] * env.max_diff
     bid_price = env.mid_price[env.current_step] + bid_diff
@@ -223,6 +234,9 @@ def convert_continuous_action(env, action):
     # asks = action[:, 3] * env.max_ticks * env.tick_size
     # bids_round = np.round(env.mid_price[env.current_step] + bids, env.price_decimals)
     # asks_round = np.round(env.mid_price[env.current_step] + asks, env.price_decimals)
+    # logging.debug(
+    #     f"continuous action output: {bid_sizes, ask_sizes, bid_round, ask_round}"
+    # )
     return bid_sizes, ask_sizes, bid_round, ask_round
 
 

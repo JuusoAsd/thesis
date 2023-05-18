@@ -6,6 +6,7 @@ use std::fs::File;
 use std::fs::{self, ReadDir};
 use std::path::{Path, PathBuf};
 use std::vec::IntoIter;
+use walkdir::WalkDir;
 
 pub struct FileHandler {
     path_iter: IntoIter<PathBuf>,
@@ -17,6 +18,7 @@ pub struct FileHandler {
 impl FileHandler {
     pub fn new(files: Vec<PathBuf>, headers: StringRecord, has_headers: bool) -> Self {
         let mut path_iter = files.into_iter();
+
         let file_reader = if has_headers {
             Reader::from_path(path_iter.next().unwrap()).unwrap()
         } else {
@@ -112,6 +114,7 @@ pub struct AggregateRecord {
     high_price: Decimal,
     buy_volume: Decimal,
     sell_volume: Decimal,
+    order_book_imbalance: Decimal,
 }
 
 impl AggregateRecord {
@@ -123,6 +126,7 @@ impl AggregateRecord {
         high_price: Decimal,
         buy_volume: Decimal,
         sell_volume: Decimal,
+        order_book_imbalance: Decimal,
     ) -> Self {
         Self {
             timestamp,
@@ -132,6 +136,7 @@ impl AggregateRecord {
             high_price,
             buy_volume,
             sell_volume,
+            order_book_imbalance,
         }
     }
 }
@@ -185,7 +190,6 @@ pub fn read_all_lines() {
     println!("Total: {}", total_count);
 }
 
-use walkdir::WalkDir;
 pub fn get_csv_files_sorted(target_path: &PathBuf) -> Vec<PathBuf> {
     // Input is a folder, this iterates through the content and returns all csv files
     let mut path_vec = Vec::new();
@@ -197,6 +201,30 @@ pub fn get_csv_files_sorted(target_path: &PathBuf) -> Vec<PathBuf> {
                 Some(ext) => {
                     if ext == "csv" {
                         path_vec.push(path.to_path_buf());
+                    }
+                }
+                None => continue,
+            }
+        }
+    }
+    path_vec.sort();
+    path_vec
+}
+
+pub fn get_csv_files_key(target_path: &PathBuf, str_key: &str) -> Vec<PathBuf> {
+    // Input is a folder, this iterates through the content and returns all csv files containing the key
+    let mut path_vec = Vec::new();
+    for entry in WalkDir::new(target_path) {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.is_file() {
+            match path.extension() {
+                Some(ext) => {
+                    if ext == "csv" {
+                        let file_name = path.file_name().unwrap().to_str().unwrap();
+                        if file_name.contains(str_key) {
+                            path_vec.push(path.to_path_buf());
+                        }
                     }
                 }
                 None => continue,
@@ -237,4 +265,31 @@ pub fn get_file_date(file_path: &Path) -> String {
     let file_str = file_path.to_str().unwrap().to_string();
     let file_date = &file_str[file_str.len() - 10..];
     file_date.to_string()
+}
+
+pub fn get_first_timestamp(file_path: &PathBuf, timestamp_column: usize) -> i64 {
+    let file = File::open(file_path).unwrap();
+    let mut rdr = csv::Reader::from_reader(file);
+    let first_record = rdr.records().next().unwrap().unwrap();
+    let first_timestamp = first_record.get(timestamp_column).unwrap();
+    let first_ts = match first_timestamp.parse::<i64>() {
+        Ok(ts) => ts,
+        Err(_) => panic!("Could not parse timestamp for file {:?}", file_path),
+    };
+    first_ts
+}
+
+pub fn get_last_timestamp(file_path: &PathBuf, timestamp_column: usize) -> i64 {
+    let file = File::open(file_path).unwrap();
+    let mut rdr = csv::Reader::from_reader(file);
+    let mut last_timestamp = 0;
+    for record in rdr.records() {
+        let record = record.unwrap();
+        last_timestamp = record
+            .get(timestamp_column)
+            .unwrap()
+            .parse::<i64>()
+            .unwrap();
+    }
+    last_timestamp
 }

@@ -1,0 +1,16 @@
+run_name: preload_repeat_test
+samples: 9
+searcher:
+  repeats: 3
+search_space:
+  tuning:
+    timesteps: 10_0000
+    callback:
+      initial_expert: False
+      save_best_model: False
+      wait: 2
+      freq: 2
+      patience: 1
+      improvement_thresh: 0.01
+      time_envs: 4
+      inv_envs: 3

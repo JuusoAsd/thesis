@@ -1,5 +1,9 @@
 import os
+import logging
 from enum import Enum
+
+import pickle
+
 
 from pathlib import Path
 import numpy as np
@@ -13,96 +17,150 @@ from imitation.data import rollout
 from stable_baselines3.common.vec_env import VecNormalize
 
 
-from environments.env_configs.policies import ASPolicyVec
-from environments.mm_env_vec import MMVecEnv, SBMMVecEnv
-from environments.env_configs.util import BCEvalCallback
-from environments.env_configs.rewards import *
-from environments.env_configs.spaces import (
+from src.environments.env_configs.policies import ASPolicyVec
+from src.environments.mm_env_vec import MMVecEnv, SBMMVecEnv
+from src.environments.env_configs.rewards import *
+from src.environments.env_configs.spaces import (
     ActionSpace,
     LinearObservationSpaces,
     LinearObservation,
 )
 
+from src.model_testing import trained_vs_manual
+from src.data_management import get_data_by_dates
+from src.util import get_model_hash
+from src.util import get_config, create_config_hash
+from src.environments.util import setup_venv_config
 
 load_dotenv()
 
-base = pd.read_csv(os.getenv("BASE_PATH"))
-indicators = pd.read_csv(os.getenv("INDICATOR_PATH"))
-data = pd.merge(base, indicators, on="timestamp", how="left").ffill().dropna()
-data["mid_price"] = np.round((data.best_bid + data.best_ask) / 2, 5)
 
-column_mapping = {col: n for (n, col) in enumerate(data.columns)}
-rng = np.random.default_rng(0)
+def load_transitions(name):
+    try:
+        dir = Path(f"{os.getenv('COMMON_PATH')}/models/transitions")
+        with open(dir / f"{name}.pickle", "rb") as f:
+            transitions = pickle.load(f)
+            logging.info(f"loaded transitions")
+            return transitions
+    except:
+        return None
 
 
-# def clone_simple_policy_dagger():
-#     n_env = 8
-#     obs_space = ObservationSpace.SimpleObservation
-#     act_space = ActionSpace.NormalizedAction
+def save_transitions(transitions, name):
+    dir = Path(f"{os.getenv('COMMON_PATH')}/models/transitions")
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+    with open(dir / f"{name}.pickle", "wb") as f:
+        pickle.dump(transitions, f)
+    logging.info(f"saved transitions")
 
-#     env = MMVecEnv(
-#         data.to_numpy(),
-#         n_envs=n_env,
-#         params={
-#             "observation_space": obs_space,
-#             "action_space": act_space,
-#         },
-#         column_mapping=column_mapping,
-#         reward_class=InventoryIntegralPenalty,
-#     )
 
-#     venv = SBMMVecEnv(env)
-#     student_model = PPO("MlpPolicy", venv, verbose=1)
-#     student_policy = student_model.policy
-#     expert_trainer = SimplePolicyVec(env)
-#     rng = np.random.default_rng(0)
-#     bc_trainer = bc.BC(
-#         rng=rng,
-#         observation_space=env.observation_space,
-#         action_space=env.action_space,
-#         policy=student_policy,
-#         batch_size=32,
-#         ent_weight=1e-3,
-#         l2_weight=0.0,
-#         optimizer_cls=th.optim.Adam,
-#         optimizer_kwargs=dict(lr=0.001),
-#     )
+def save_model_by_config(config, model):
+    """
+    Save the model based on the config. Must be unique to that it can be reused.
+    """
+    hash = get_model_hash(config)
+    dir = Path(f"{os.getenv('COMMON_PATH')}/models/cloned/{hash}")
+    model.save(dir)
 
-#     with tempfile.TemporaryDirectory(prefix="dagger_example_") as tmpdir:
-#         print(tmpdir)
-#         imitation_trainer = SimpleDAggerTrainer(
-#             venv=venv,
-#             scratch_dir=tmpdir,
-#             expert_policy=expert_trainer.get_action_func(),
-#             bc_trainer=bc_trainer,
-#             rng=np.random.default_rng(15),
-#             beta_schedule=ExponentialBetaSchedule(0.5),
-#         )
 
-#         eval_callback = BCEvalCallback(
-#             imitation_trainer,
-#             venv,
-#             freq=5000,  # how often to evaluate
-#             wait=20,  # how long to wait until first evaluation
-#             patience=6,
-#             n_episodes=25,  # how many episodes to evaluate on
-#         )
+def load_model_by_config_hash(config, venv):
+    hash = get_model_hash(config)
+    if not check_model_exists_by_config(config):
+        raise Exception(f"Model does not exist for {hash}")
+    path = Path(f"{os.getenv('COMMON_PATH')}/models/cloned/{hash}.zip")
+    model = PPO.load(path, env=venv)
+    return model
 
-#         imitation_trainer.train(
-#             1_000_000,
-#             rollout_round_min_episodes=3,
-#             rollout_round_min_timesteps=5000,
-#             bc_train_kwargs=dict(
-#                 n_batches=5000,
-#                 on_batch_end=eval_callback,
-#                 log_rollouts_venv=venv,  # do rollout stats on this env, not train env!
-#                 log_rollouts_n_episodes=1,
-#                 # progress_bar=True,
-#                 log_interval=10_000,
-#             ),  # default None
-#         )
 
-#     save_trained_model(student_model, "clone_simple_dagger")
+def load_model_by_config(config, venv):
+    path = Path(
+        f"{os.getenv('COMMON_PATH')}/models/cloned/{config.model.model_name}.zip"
+    )
+    model = PPO.load(path, env=venv)
+    return model
+
+
+def check_model_exists_by_config(config):
+    hash = get_model_hash(config)
+    path = Path(f"{os.getenv('COMMON_PATH')}/models/cloned/{hash}.zip")
+    return os.path.exists(path)
+
+
+def get_transitions(config, venv):
+    """
+    Creates or loads the transitions used for cloning.
+    Most of the items are fixed, however only observation and action space affect the transitions
+    Use those for saving/loading
+    TODO: maybe something else also affect the transitions?
+    - Actual number of envs does, therefore also how the venvs are setup but that is ok
+    """
+    logging.info(f"Getting transitions")
+    expert_policy = ASPolicyVec
+    expert = expert_policy(env=venv.env, **config.expert_params)
+    rng = np.random.default_rng(0)
+    name = f"{config.env.spaces.action_space}_{config.env.spaces.observation_space.type}_transitions"
+    loaded = load_transitions(name)
+    if loaded is None:
+        rollouts = rollout.rollout(
+            expert.get_action_func(),
+            venv,
+            rollout.make_sample_until(min_timesteps=None, min_episodes=venv.env.n_envs),
+            rng=rng,
+            unwrap=False,
+            verbose=True,
+        )
+        transitions = rollout.flatten_trajectories(rollouts)
+        save_transitions(transitions, name)
+    else:
+        transitions = loaded
+
+    return transitions
+
+
+def clone_expert_config(config, venv, student_model, transitions):
+    logging.info(f"cloning")
+    # start by checking if this model already exists
+    if check_model_exists_by_config(config):
+        return
+    student_policy = student_model.policy
+    rng = np.random.default_rng(0)
+    imitation_trainer = bc.BC(
+        observation_space=venv.env.observation_space,
+        action_space=venv.env.action_space,
+        policy=student_policy,  # USE SAME ARCHITECTURE AS MODEL!!!
+        demonstrations=transitions,
+        batch_size=32,
+        optimizer_cls=th.optim.Adam,
+        optimizer_kwargs=dict(lr=0.001),
+        ent_weight=1e-3,
+        l2_weight=0.0,
+        rng=rng,
+    )
+    tries = 3
+    while True:
+        # train with 5k batches = 2mins
+        imitation_trainer.train(
+            n_batches=5_000,
+            log_interval=10_000,
+            log_rollouts_venv=venv,
+            log_rollouts_n_episodes=1,
+            progress_bar=False
+            # on_batch_end=eval_callback,
+        )
+        model_res, expert_res = trained_vs_manual(venv.clone_venv(), student_model)
+        if (
+            expert_res["trades"] * (1 - config.cloning.tolerance)
+            < model_res["trades"]
+            < expert_res["trades"] * (1 + config.cloning.tolerance)
+        ):
+            break
+        tries -= 1
+        if tries == 0:
+            raise Exception("Could not clone model")
+
+    # if cloning was succesful, save the model
+    save_model_by_config(config, student_model)
 
 
 def save_trained_model(model, path):
@@ -113,7 +171,7 @@ def save_trained_model(model, path):
     model: the trained model
     dir: optional sub-dir of self.save_path to save the model in
     """
-    model_dir = Path(f"{os.getcwd()}/models")
+    model_dir = Path(f"{os.getenv('COMMON_PATH')}/models")
 
     model_path = str(model_dir / path)
     model.save(model_path)
@@ -123,17 +181,17 @@ def save_trained_model(model, path):
         wrapper.save(str(model_dir / (path + "_vec_normalize.pkl")))
 
 
-def load_trained_model(name, venv, normalize=True):
+def load_trained_model(name, venv, normalize=True, model_kwargs={}):
     model_dict = {}
-    model_dir = Path(f"{os.getcwd()}/models")
+    model_dir = Path(f"{os.getenv('COMMON_PATH')}/models")
 
     model_path = str(model_dir / name)
     normalize_path = str(model_dir / (name + "_vec_normalize.pkl"))
     if os.path.exists(normalize_path) and normalize:
         normalized_venv = VecNormalize.load(normalize_path, venv)
-        model = PPO.load(model_path, env=normalized_venv)
+        model = PPO.load(model_path, env=normalized_venv, **model_kwargs)
     else:
-        model = PPO.load(model_path)
+        model = PPO.load(path=model_path, env=venv, **model_kwargs)
 
     return model
 
@@ -150,7 +208,7 @@ class CloneDuration(Enum):
     VeryLong = 3
 
 
-def clone_bc(venv, expert_trainer, student_model, duration, testing=True):
+def clone_bc(venv, expert_trainer, student_model, duration, model_name, testing=True):
     env = venv.env
 
     # depending on what duration is, there are 2 different configs
@@ -168,7 +226,7 @@ def clone_bc(venv, expert_trainer, student_model, duration, testing=True):
         CloneDuration.Long: {
             "min_episodes": venv.env.n_envs,
             "evaluation_freq": 25_000,
-            "n_batches": 50_000,
+            "n_batches": 50_0,
         },
         CloneDuration.VeryLong: {
             "min_episodes": 10_000_000,
@@ -177,6 +235,7 @@ def clone_bc(venv, expert_trainer, student_model, duration, testing=True):
         },
     }
     chosen_config = config_dict[duration]
+    rng = np.random.default_rng(0)
 
     rollouts = rollout.rollout(
         expert_trainer.get_action_func(),
@@ -189,7 +248,6 @@ def clone_bc(venv, expert_trainer, student_model, duration, testing=True):
     )
 
     transitions = rollout.flatten_trajectories(rollouts)
-
     if testing:
         n = 0
         all_val = []
@@ -223,23 +281,14 @@ def clone_bc(venv, expert_trainer, student_model, duration, testing=True):
         rng=rng,
     )
 
-    eval_callback = BCEvalCallback(
-        imitation_trainer,
-        venv,
-        freq=chosen_config["evaluation_freq"],  # how often to evaluate
-        wait=15,  # how long to wait until first evaluation
-        patience=6,
-        n_episodes=5,  # how many episodes to evaluate on
-    )
-
     imitation_trainer.train(
         n_batches=chosen_config["n_batches"],
         log_interval=10_000,
         log_rollouts_venv=venv,
         log_rollouts_n_episodes=1,
-        on_batch_end=eval_callback,
+        # on_batch_end=eval_callback,
     )
-    save_trained_model(student_model, "clone_bc")
+    save_trained_model(student_model, model_name)
     return "clone_bc"
 
 
@@ -365,6 +414,60 @@ def model_cloning():
     )
 
 
+def cloning_v2():
+    config = get_config("clone_config")
+
+    venv = setup_venv_config(config.data, config.env, config.venv)
+
+    cloning_duration = CloneDuration.Short
+    expert_policy = ASPolicyVec
+    expert = expert_policy(env=venv.env, **config.expert_params)
+    student_model = PPO(
+        "MlpPolicy", venv, verbose=1, policy_kwargs=config.policy_kwargs
+    )
+
+    model_name = clone_bc(
+        venv,
+        expert,
+        student_model,
+        cloning_duration,
+        testing=False,
+        model_name="clone_large",
+    )
+
+
+def cloning_multiple_envs():
+    from omegaconf import OmegaConf
+    import time
+
+    config = get_config("clone_config_multiple")
+    venv = setup_venv_config(config.clone_data, config.env, config.venv)
+    cloning_duration = CloneDuration.Short
+    expert_policy = ASPolicyVec
+    expert = expert_policy(env=venv.env, **config.expert_params)
+
+    for i in config.policy_kwargs:
+        start_time = time.time()
+        hash = create_config_hash(i)
+        print(f"value: {i}, hash: {hash}")
+        config_to_dict = OmegaConf.to_container(i, resolve=True)
+        student_model = PPO("MlpPolicy", venv, verbose=1, policy_kwargs=config_to_dict)
+        model_name = clone_bc(
+            venv,
+            expert,
+            student_model,
+            cloning_duration,
+            testing=False,
+            model_name=hash,
+        )
+        model = load_trained_model(hash, venv, False)
+        single_venv = venv.clone_venv(
+            get_data_by_dates(**config.verify_cloning_data).to_numpy()
+        )
+        trained_vs_manual(single_venv, model, False)
+        print(f"DONE, took {round((time.time() - start_time)/60,2)} minutes\n")
+
+
 if __name__ == "__main__":
     # clone_manual_policy_dagger()
     # clone_manual_policy_bc()
@@ -372,5 +475,7 @@ if __name__ == "__main__":
     # clone_simple_policy()
     # clone_simple_policy_dagger()
     # compare_cloned()
-    model_cloning()
+    # model_cloning()
     # test_normalized_env()
+    # cloning_v2()
+    cloning_multiple_envs()
