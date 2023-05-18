@@ -20,8 +20,9 @@ os.environ["TUNE_DISABLE_STRICT_METRIC_CHECKING"] = "1"
 
 def tune_action_func_selection():
     config = get_config("tuning_preload_repeat")
-    short_override = get_config("short_run_override")
-    config = OmegaConf.merge(config, short_override)
+    if config.trial_run:
+        short_override = get_config("short_run_override")
+        config = OmegaConf.merge(config, short_override)
     search_space = create_parameter_space(config.search_space)
     flat_config = flatten_config(search_space)
 
