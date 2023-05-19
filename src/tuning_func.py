@@ -218,7 +218,7 @@ def objective_preload_repeat(config_dict):
     eval_data = get_data_by_dates(**config.eval_data)
     if config.clone:
         model_hash = create_config_hash(config.model.policy_kwargs)
-        config.model_name = model_hash
+        config.model.model_name = model_hash
         model = load_model_by_config(config, venv)
     else:
         kwarg_dict = OmegaConf.to_container(config.model.policy_kwargs, resolve=True)
