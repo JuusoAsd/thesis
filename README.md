@@ -28,3 +28,13 @@ Example:
 start by connecting vpn (vpn1.aalto.fi)
 - ssh triton
 - rsync -avzc -e "ssh" hello.txt triton:/scratch/work/ahlrooj1/
+- sbatch FILEPATH
+
+
+##### install packages
+- module load anaconda
+- module load miniconda
+- conda create -n env python=3.9
+- conda activate env
+- pip install ...
+

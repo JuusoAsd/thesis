@@ -4,3 +4,6 @@ ray[tune]
 imitation
 numpy
 pandas
+pytest
+python-dotenv
+hydra-core

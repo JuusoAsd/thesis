@@ -22,6 +22,7 @@ reporter:
 searcher:
   repeats: 8
   metric: "group_reward" # what metric searcher optimizes for
+  mode: min
   initial_values:
     env:
       spaces: 

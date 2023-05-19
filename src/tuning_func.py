@@ -29,7 +29,6 @@ from src.environments.env_configs.callbacks import ExternalMeasureCallback
 
 
 os.environ["TUNE_DISABLE_STRICT_METRIC_CHECKING"] = "1"
-common_config = get_config("test_yaml")
 
 
 def objective_simple(
