@@ -14,6 +14,8 @@ from ray.tune.search.hyperopt import HyperOptSearch
 from src.util import create_parameter_space, flatten_config, get_config, trial_namer
 from src.tuning_func import objective_preload_repeat
 from src.environments.env_configs.callbacks import GroupRewardCallback
+import ray
+ray.init()
 
 os.environ["TUNE_DISABLE_STRICT_METRIC_CHECKING"] = "1"
 
@@ -49,8 +51,12 @@ def tune_action_func_selection():
     repeater = Repeater(search_algo, set_index=True, repeat=config.searcher.repeats)
     callback = GroupRewardCallback(repeater=repeater, mode=config.searcher.mode)
 
+    # available_cpus = int(ray.cluster_resources()['CPU'])
+    # num_cpus = int(available_cpus - 1 if available_cpus >= 20 else available_cpus)
+    # trainable = tune.with_resources(objective_preload_repeat, dict(cpu=num_cpus))
+    trainable = objective_preload_repeat
     tuner = tune.Tuner(
-        trainable=objective_preload_repeat,
+        trainable=trainable,
         param_space=flat_config,
         run_config=RunConfig(
             name=config.run_name,
@@ -65,5 +71,6 @@ def tune_action_func_selection():
             trial_name_creator=trial_namer,
         ),
     )
+
 
     tuner.fit()
