@@ -411,7 +411,7 @@ class MMVecEnv(gym.Env):
         volatility = np.std(returns, axis=0)
         # volatility = np.std(np.diff(np.array(values)[:, 0]))  # VECTORIZE
 
-        sharpe = total_return / volatility
+        sharpe = total_return / (volatility + 1e-8)
         trades = self.trade_market + self.trade_limit
         max_inventory = np.max(np.abs(self.inventory_values), axis=0)
         values = {

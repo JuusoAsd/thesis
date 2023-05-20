@@ -193,7 +193,7 @@ class ExternalMeasureCallback(BaseCallback):
             return np.min(aggregate)
         elif self.eval_mode == "return/inventory":
             is_liquidated = metrics["max_inventory"] > 0.99
-            metric = metrics['episode_return'] / metrics['mean_abs_inv']
+            metric = metrics['episode_return'] / (metrics['mean_abs_inv'] + 1e-6)
             aggregate = np.minimum(
                 metric, metric * (1 - is_liquidated)
             )
