@@ -4,6 +4,7 @@ run_name: preload_repeat
 samples: 1000
 trial_run: True
 
+# ----------report table----------
 reporter: 
   parameter_columns: ["env.reward_space", "clone", "model.policy_kwargs.net_arch"]
   metric_columns:
@@ -15,10 +16,13 @@ reporter:
     - "mean_abs_inv"
     - "max_inventory"
     - "duration"
-  sort_metric: "group_reward"
+  sort_metric: "trial_reward"
   report_frequency: 60 # seconds
   report_rows: 30
-  mode: min
+  mode: min # aggregation mode
+
+
+# ----------parameter searcher----------
 searcher:
   repeats: 8
   metric: "group_reward" # what metric searcher optimizes for
@@ -131,4 +135,4 @@ search_space:
       improvement_thresh: 0.01
       time_envs: 1
       inv_envs: 1
-      eval_mode: return_inventory
+      eval_mode: return/inventory
