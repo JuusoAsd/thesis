@@ -1,0 +1,19 @@
+data:
+  start_date: "2021_12_24"
+  end_date: "2021_12_26"
+
+env: 
+    spaces:
+      action_space: NormalizedAction
+      observation_space: 
+        type: "linear"
+        params: EverythingLinearSpace
+    reward_space: inventory_integral_penalty 
+    params:
+      inv_envs: 1
+      time_envs: 1
+venv:
+    random: 1
+
+model:
+  model_name: clone_large
