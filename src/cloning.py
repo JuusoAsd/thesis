@@ -60,7 +60,7 @@ def save_model_by_config(config, model):
     Save the model based on the config. Must be unique to that it can be reused.
     """
     hash = get_model_hash(config)
-    dir = Path(f"{os.getenv('COMMON_PATH')}/models/cloned/{hash}")
+    dir = Path(f"{os.getenv('COMMON_PATH')}/models/{hash}")
     model.save(dir)
 
 
@@ -68,14 +68,15 @@ def load_model_by_config_hash(config, venv):
     hash = get_model_hash(config)
     if not check_model_exists_by_config(config):
         raise Exception(f"Model does not exist for {hash}")
-    path = Path(f"{os.getenv('COMMON_PATH')}/models/cloned/{hash}.zip")
+    path = Path(f"{os.getenv('COMMON_PATH')}/models/{hash}.zip")
     model = PPO.load(path, env=venv)
     return model
 
 
 def load_model_by_config(config, venv):
+    # .zip is not appended to the path here for some reason????
     path = Path(
-        f"{os.getenv('COMMON_PATH')}/models/cloned/{config.model.model_name}.zip"
+        f"{os.getenv('COMMON_PATH')}/models/{config.model.model_name}"
     )
     model = PPO.load(path, env=venv)
     return model
@@ -83,7 +84,7 @@ def load_model_by_config(config, venv):
 
 def check_model_exists_by_config(config):
     hash = get_model_hash(config)
-    path = Path(f"{os.getenv('COMMON_PATH')}/models/cloned/{hash}.zip")
+    path = Path(f"{os.getenv('COMMON_PATH')}/models/{hash}.zip")
     return os.path.exists(path)
 
 

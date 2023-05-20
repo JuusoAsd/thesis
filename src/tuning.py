@@ -64,8 +64,7 @@ def cont_tuning():
     tuner.fit()
 
 
-def trial_namer(trial):
-    return f"{trial.trainable_name}_{trial.trial_id}"
+
 
 
 def tune_cloning():

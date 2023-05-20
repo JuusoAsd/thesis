@@ -131,3 +131,4 @@ search_space:
       improvement_thresh: 0.01
       time_envs: 1
       inv_envs: 1
+      eval_mode: return_inventory

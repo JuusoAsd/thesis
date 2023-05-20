@@ -73,3 +73,15 @@ env_multi_as:
       inv_envs: 5
       inv_jump: 0.1
       time_envs: 5
+
+env_multi_as_full:
+    spaces:
+      action_space: NormalizedAction
+      observation_space: 
+        type: "linear"
+        params: SimpleLinearSpace
+    reward_space: inventory_integral_penalty 
+    params:
+      inv_envs: 5
+      inv_jump: 0.1
+      time_envs: 3

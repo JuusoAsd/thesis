@@ -123,3 +123,47 @@ def test_multi_env_as():
     last_val = recorded["values"][-1][0]
     returns = last_val / first_val - 1
     assert metrics["episode_return"][0] == returns
+
+
+def test_env_full():
+    import pandas as pd
+    venv = setup_venv_config(config.data, config.env_multi_as_full, config.venv)
+    expert_policy = ASPolicyVec(venv.env, **config.expert_params)
+    action_func = expert_policy.get_action_func()
+    
+    obs = venv.reset()
+    max = 100000
+    n = 0
+    while True:
+        n+= 1
+        action = action_func(obs)
+        obs, reward, done, info = venv.step(action)
+        current_inv = venv.env.norm_inventory.T
+        qty = venv.env.inventory_qty.T
+        # print(f"{qty}")
+        # print(f"{current_inv} \n")
+
+        is_high = current_inv > 0.9
+        if np.any(done) or n > max or np.any(is_high):
+            break
+
+    metrics = venv.env.get_metrics()
+    print(metrics)
+    # raw_values = venv.env.get_raw_recorded_values()
+    # raw_values.pop("market_trades")
+    # raw_values.pop("limit_trades")
+    # # pd.DataFrame(raw_values).to_csv("test_env_full.csv")
+    # arr = np.array(raw_values['inventory_values']).reshape(-1, venv.num_envs)
+
+    # # print(arr)
+    # # maxed = np.max(arr,axis=0 )
+    # # print(maxed)
+    # # print(maxed.shape)
+    # # print(arr.shape)
+
+
+    # # print(arr.reshape(1, -1))[0]
+
+    # print(venv.env.get_recorded_values_to_df())
+
+    # print(venv.env._get_value())

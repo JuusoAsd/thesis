@@ -211,7 +211,7 @@ def locked_write_dataframe_to_csv(trial_name, filename, dataframe):
 
 
 def trial_namer(trial):
-    return f"{trial.trainable_name}_{trial.trial_id}"
+    return f"{trial.trainable_name[-4:]}_{trial.trial_id}"
 
 
 if __name__ == "__main__":

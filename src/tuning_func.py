@@ -201,6 +201,10 @@ def objective_preload_repeat(config_dict):
     - model is initialized with a cloned model (or not depending on config)
     - there are multiple architecture options for the model
     - repeats of the trials are performed using repeater rather than loop in objective
+
+    trial reward is the best reward achieved during validation
+    this depends on what performance metric is used with the callback
+    group reward is dependent on grouprewardcallback mode (minimum sharpe)
     """
     start_time = time.time()
     un_flat = de_flatten_config(config_dict)

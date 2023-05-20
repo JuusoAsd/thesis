@@ -206,3 +206,4 @@ def test_multi_env():
     assert obs.shape == (5, 3)
     assert reward.shape == (5,)
     assert done.shape == (5,)
+    

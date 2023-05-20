@@ -185,7 +185,7 @@ class MMVecEnv(gym.Env):
         inventory_value = self.inventory_qty * p
         self.quote = self.capital - inventory_value
         # normalized_inventory, this is updated when calling _get_observation, can initialize at 0
-        self.norm_inventory = np.zeros(self.n_envs)
+        self.norm_inventory = np.zeros(self.n_envs).astype(np.float64)
 
         self.bids = np.array(0 * self.n_envs).astype(np.float64)
         self.bid_sizes = np.zeros(self.n_envs)
@@ -311,7 +311,7 @@ class MMVecEnv(gym.Env):
         self.norm_inventory = np.round(
             self.inventory_qty
             / (self.inventory_qty + self.quote / self.mid_price[self.current_step])
-            - self.inventory_target
+            - self.inventory_target, 5
         ).reshape(-1, 1)
         if isinstance(self.obs_space, LinearObservation):
             val = self.external_obs[self.current_step]
@@ -386,6 +386,15 @@ class MMVecEnv(gym.Env):
             "market_trades": self.trade_market,
             "limit_trades": self.trade_limit,
         }
+    
+    def get_recorded_values_to_df(self):
+        raw_values = self.get_raw_recorded_values()
+        df_dict = {
+            "values": np.array(raw_values["values"]).reshape(1,-1)[0],
+            "inventory_values": np.array(raw_values["inventory_values"]).reshape(1,-1)[0],
+            "inventory_qty": np.array(raw_values["inventory_qty"]).reshape(1,-1)[0],
+        }
+        return pd.DataFrame(df_dict)
 
     def get_metrics(self):
         """
@@ -398,7 +407,9 @@ class MMVecEnv(gym.Env):
         values = np.array(self.values).reshape(-1, self.n_envs)
         total_return = values[-1, :] / values[0, :] - 1  # VECTORIZE
         drawdown = (values / np.maximum.accumulate(values, axis=0) - 1).min(axis=0)
-        volatility = np.std(np.diff(np.array(values)[:, 0]))  # VECTORIZE
+        returns = np.diff(values, axis=0) / values[:-1, :]
+        volatility = np.std(returns, axis=0)
+        # volatility = np.std(np.diff(np.array(values)[:, 0]))  # VECTORIZE
 
         sharpe = total_return / volatility
         trades = self.trade_market + self.trade_limit
