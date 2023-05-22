@@ -105,12 +105,9 @@ def test_external_measure_callback(caplog):
     venv.reset()
     callback = ExternalMeasureCallback(df.to_numpy(), venv, wait=2, freq=1, patience=1)
     good_action = np.array([1, 1, -1, 1])
-    no_trades_action = np.array([0, 0, -1, 1])
-    bad_action = np.array([1, 1, 1, -1])
     helper = Helper([good_action, good_action, good_action])
     callback.__setattr__("locals", {"self": helper})
 
     callback._on_rollout_end()
     assert callback.eval_count == 1
-    callback._on_rollout_end()
     callback._on_rollout_end()

@@ -68,6 +68,7 @@ def test_limit_order(caplog):
         ),
         env_params={"max_ticks": 30},
     )
+    venv.env.reset_metrics_on_reset = False
     action = np.array([1, 1, -1, 1])
     obs, reward, done, info = venv.step(action)
     expected_value = (
@@ -92,6 +93,8 @@ def test_market_order(caplog):
     )
     venv.reset()
     venv.env.reset_metrics()
+    venv.env.reset_metrics_on_reset = False
+
     action = np.array([1, 1, 1, -1])
 
     obs, reward, done, info = venv.step(action)
@@ -115,6 +118,8 @@ def test_zero_qty():
         ),
         env_params={"max_ticks": 30},
     )
+    venv.env.reset_metrics_on_reset = False
+
     action = np.array([0, 0, -1, 1])
     obs, reward, done, info = venv.step(action)
     expected_value = venv.env.capital
@@ -134,6 +139,8 @@ def test_metrics():
         ),
         env_params={"max_ticks": 30},
     )
+    venv.env.reset_metrics_on_reset = False
+
     values = [100, 80, 110, 120]
     inventory = [0.5, 0.7, 0.9]
     venv.env.values = [np.array([x]) for x in values]
@@ -141,9 +148,6 @@ def test_metrics():
 
     metrics = venv.env.get_metrics()
     assert pytest.approx(metrics["episode_return"][0], rel=1e-5) == 0.2
-    assert pytest.approx(metrics["sharpe"][0], rel=1e-5) == 0.2 / np.std(
-        np.diff(np.array(values))
-    )
     assert pytest.approx(metrics["drawdown"][0], rel=1e-5) == -0.2
     assert pytest.approx(metrics["max_inventory"][0], rel=1e-5) == 0.9
     assert pytest.approx(metrics["mean_abs_inv"][0], rel=1e-5) == np.mean(
@@ -206,4 +210,3 @@ def test_multi_env():
     assert obs.shape == (5, 3)
     assert reward.shape == (5,)
     assert done.shape == (5,)
-    

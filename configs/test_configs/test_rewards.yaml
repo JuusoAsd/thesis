@@ -13,6 +13,8 @@ env:
     params:
       inv_envs: 1
       time_envs: 1
+      reset_metrics_on_reset: False
+
 venv:
     random: 1
 
@@ -27,6 +29,8 @@ env_parallel:
     params:
       inv_envs: 2
       time_envs: 3
+      reset_metrics_on_reset: False
+
 
 # test_setting_reward_params
 env_reward_params: 
@@ -41,6 +45,8 @@ env_reward_params:
       time_envs: 1
       reward_params:
         inventory_threshold: 0.5
+      reset_metrics_on_reset: False
+      
 
 expert_params:
   max_order_size: 5

@@ -192,3 +192,7 @@ def test_setting_reward_params():
     venv = setup_venv_config(config.data, config.env_reward_params, config.venv)
     assert venv.env.reward_params == {"inventory_threshold": 0.5}
     assert venv.env.reward_class.inventory_threshold == 0.5
+
+    clone_env = venv.clone_venv()
+    assert clone_env.env.reward_params == {"inventory_threshold": 0.5}
+    assert clone_env.env.reward_class.inventory_threshold == 0.5

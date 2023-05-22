@@ -214,7 +214,6 @@ class MMVecEnv(gym.Env):
         value_end = self._get_value()
         if self.record_values:
             self.values.append(value_end)  # VECTORIZE
-        reward = self.reward_class.end_step()
 
         # determine if episode is done
         is_over = self.current_step == self.end_steps
@@ -222,12 +221,17 @@ class MMVecEnv(gym.Env):
         # increment step unless episode is done
         self.current_step += 1 - is_over
         obs = self._get_observation()
-        is_dones = is_over.T
+
         info = np.repeat({}, self.n_envs)
         if self.record_values:
             self.inventory_qty_values.append(self.inventory_qty.copy())
             self.inventory_values.append(self.norm_inventory)  # VECTORIZE
 
+        # calculate reward (here because lookback values are now saved)
+        reward = self.reward_class.end_step()
+
+        # check done
+        is_dones = is_over.T
         for i in range(self.n_envs):
             if is_dones[i]:
                 info[i] = dict(terminal_observation=obs[i])
@@ -467,6 +471,7 @@ class MMVecEnv(gym.Env):
         # if reset
         self.values = []
         self.inventory_values = []
+        self.inventory_qty_values = []
         self.trade_market = np.zeros(self.n_envs)
         self.trade_limit = np.zeros(self.n_envs)
 

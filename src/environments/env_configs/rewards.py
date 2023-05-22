@@ -236,6 +236,48 @@ class SimpleInventoryPnlReward(BaseRewardClass):
         return profit / (1 + inventory) - is_high * self.high_penalty
 
 
+class DeltaInventoryPnLReward(BaseRewardClass):
+    def __init__(
+        self,
+        env,
+        inventory_threshold=0.8,
+        high_penalty=100,
+        steps=10,
+        inventory_multiplier=1,
+    ):
+        super().__init__(env)
+        self.inventory_threshold = inventory_threshold
+        self.high_penalty = high_penalty
+        self.steps = steps
+        self.inventory_multiplier = inventory_multiplier
+
+    def start_step(self):
+        pass
+
+    def end_step(self):
+        # env keeps track of end values in self.values
+        last_value = self.env.values[-1]
+        last_inv = self.env.inventory_values[-1]
+        try:
+            start_value = self.env.values[-self.steps]
+        except IndexError:
+            start_value = self.env.values[0]
+        try:
+            start_inv = self.env.inventory_values[-self.steps]
+        except IndexError:
+            start_inv = self.env.inventory_values[0]
+
+        # inventory decrease is good, increase bad
+        delta_inventory = (
+            np.abs(last_inv) - np.abs(start_inv)
+        ) * self.inventory_multiplier
+        # positive pnl is good, negative bad
+        delta_pnl = last_value - start_value
+        # if inventory is high, penalize
+        inventory_is_high = np.abs(self.env.norm_inventory) > self.inventory_threshold
+        return delta_pnl - delta_inventory - inventory_is_high * self.high_penalty
+
+
 reward_dict = {
     "pnl": PnLReward,
     "inventory": InventoryReward,
@@ -243,5 +285,6 @@ reward_dict = {
     "multistep_pnl": MultistepPnl,
     "assymetric_pnl_dampening": AssymetricPnLDampening,
     "inventory_integral_penalty": InventoryIntegralPenalty,
-    "simple_inventory_pnl_reward": SimpleInventoryPnlReward,
+    "simple_inventory_pnl": SimpleInventoryPnlReward,
+    "delta_inventory_pnl": DeltaInventoryPnLReward,
 }

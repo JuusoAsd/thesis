@@ -34,6 +34,8 @@ def test_model_all_rewards():
     data = get_data_by_dates(**config.data)
     for k, v in reward_dict.items():
         venv = setup_venv(data, reward_class=v)
+        venv.env.reset_metrics_on_reset = False
+
         try:
             model = PPO("MlpPolicy", venv, verbose=0)
             model.learn(100)
@@ -48,6 +50,8 @@ def test_model_all_rewards_parallel(caplog):
     for k, v in reward_dict.items():
         # if k == "inventory_integral_penalty":
         venv = setup_venv(data, reward_class=v, time_envs=3)
+        venv.env.reset_metrics_on_reset = False
+
         try:
             model = PPO("MlpPolicy", venv, verbose=0)
             model.learn(100)
@@ -59,6 +63,7 @@ def test_model_all_rewards_parallel(caplog):
 @pytest.mark.slow
 def test_cloning():
     venv = setup_venv_config(config.data, config.env, config.venv)
+
     model = PPO("MlpPolicy", venv, verbose=0)
     expert_policy = ASPolicyVec(venv.env, **config.expert_params)
     action_func = expert_policy.get_action_func()
