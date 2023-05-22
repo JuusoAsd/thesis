@@ -1,0 +1,24 @@
+run_name: inventory_integral_penalty_reward
+searcher:
+  initial_values:
+    env:
+      reward_params:
+        inventory_threshold: 0.8
+        high_penalty: 100
+        steps: 10
+        penalty_limit: 0.3
+        over_time_modifier: 2
+        spot_modifier: 2
+
+# ----------SEARCH----------
+search_space:
+  run_name: ${run_name}
+  env: 
+    reward_space: inventory_integral_penalty 
+    reward_params:
+      inventory_threshold: ["quniform", 0.1, 1.8, 0.1]
+      high_penalty: ["choice", [0.5, 1, 2, 5, 10, 25, 100, 1000]]
+      steps: ["choice", [1, 5, 10, 25, 50, 100, 1000]] 
+      penalty_limit: ["choice", [0.1, 0.2, 0.3, 0.5, 0.7, 0.8, 0.9, 1, 1.2]] 
+      over_time_modifier: ["choice", [0.5, 1, 2, 3, 5]] 
+      spot_modifier: ["choice", [0.5, 1, 2, 3, 5]] 

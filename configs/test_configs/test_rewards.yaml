@@ -1,0 +1,52 @@
+# test_learning_rewards
+data:
+  start_date: "2021_12_24"
+  end_date: "2021_12_26"
+
+env: 
+    spaces:
+      action_space: NormalizedAction
+      observation_space: 
+        type: "linear"
+        params: SimpleLinearSpace
+    reward_space: pnl 
+    params:
+      inv_envs: 1
+      time_envs: 1
+venv:
+    random: 1
+
+# test_learning_rewards_parallel
+env_parallel: 
+    spaces:
+      action_space: NormalizedAction
+      observation_space: 
+        type: "linear"
+        params: SimpleLinearSpace
+    reward_space: pnl 
+    params:
+      inv_envs: 2
+      time_envs: 3
+
+# test_setting_reward_params
+env_reward_params: 
+    spaces:
+      action_space: NormalizedAction
+      observation_space: 
+        type: "linear"
+        params: SimpleLinearSpace
+    reward_space: pnl 
+    params:
+      inv_envs: 1
+      time_envs: 1
+      reward_params:
+        inventory_threshold: 0.5
+
+expert_params:
+  max_order_size: 5
+  tick_size: 0.0001
+  max_ticks: 10
+  price_decimals: 4
+  inventory_target: 0
+  risk_aversion: 0.2
+  order_size: 1

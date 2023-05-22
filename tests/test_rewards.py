@@ -13,6 +13,7 @@ from src.environments.env_configs.spaces import (
     LinearObservationSpaces,
     LinearObservation,
 )
+from stable_baselines3 import PPO
 
 
 import unittest
@@ -162,3 +163,32 @@ class TestRewards(unittest.TestCase):
         reward = SpreadPnlReward(env)
         expected = np.array([2 / 3 * 10, -90]).reshape(-1, 1)
         assert_allclose(reward.end_step(), expected)
+
+
+config = get_test_config("test_rewards")
+
+
+def test_learning_rewards():
+    for k, v in reward_dict.items():
+        config.env.reward_space = k
+        venv = setup_venv_config(config.data, config.env, config.venv)
+
+        assert venv.env.reward_class_type == v
+        model = PPO("MlpPolicy", venv, verbose=0)
+        model.learn(100)
+
+
+def test_learning_rewards_parallel():
+    for k, v in reward_dict.items():
+        config.env_parallel.reward_space = k
+        venv = setup_venv_config(config.data, config.env_parallel, config.venv)
+
+        assert venv.env.reward_class_type == v
+        model = PPO("MlpPolicy", venv, verbose=0)
+        model.learn(100)
+
+
+def test_setting_reward_params():
+    venv = setup_venv_config(config.data, config.env_reward_params, config.venv)
+    assert venv.env.reward_params == {"inventory_threshold": 0.5}
+    assert venv.env.reward_class.inventory_threshold == 0.5

@@ -1,0 +1,18 @@
+run_name: multistep_pnl_reward
+searcher:
+  initial_values:
+    env:
+      reward_params:
+        inventory_threshold: 0.8
+        high_penalty: 100
+        steps: 10
+
+# ----------SEARCH----------
+search_space:
+  run_name: ${run_name}
+  env: 
+    reward_space: multistep_pnl 
+    reward_params:
+      inventory_threshold: ["quniform", 0.1, 1.8, 0.1]
+      high_penalty: ["choice", [0.5, 1, 2, 5, 10, 25, 100, 1000]]
+      steps: ["choice", [1, 5, 10, 25, 50, 100, 1000]] 

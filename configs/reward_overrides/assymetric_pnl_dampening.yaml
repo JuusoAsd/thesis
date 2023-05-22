@@ -1,0 +1,22 @@
+run_name: assymetric_pnl_dampening_reward
+searcher:
+  initial_values:
+    env:
+      reward_params:
+        inventory_threshold: 0.8
+        high_penalty: 100
+        dampening: 3
+        inventory_penalty: 0.1
+        add_inventory_penalty: False
+
+# ----------SEARCH----------
+search_space:
+  run_name: ${run_name}
+  env: 
+    reward_space: assymetric_pnl_dampening 
+    reward_params:
+      inventory_threshold: ["quniform", 0.1, 1.8, 0.1]
+      high_penalty: ["choice", [0.5, 1, 2, 5, 10, 25, 100, 1000]]
+      dampening: ["choice", [0.5, 1, 2, 3, 5, 10]]
+      inventory_penalty: ["choice", [0.1, 0.2, 0.5, 1, 2]]s
+      add_inventory_penalty: ["choice", [True, False]]

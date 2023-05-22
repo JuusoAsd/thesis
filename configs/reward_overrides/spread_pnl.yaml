@@ -1,4 +1,4 @@
-run_name: pnl_reward
+run_name: spreadpnl_reward
 searcher:
   initial_values:
     env:
@@ -10,8 +10,8 @@ searcher:
 search_space:
   run_name: ${run_name}
   env: 
-    reward_space: pnl 
+    reward_space: spreadpnl 
     reward_params:
       inventory_threshold: ["quniform", 0.1, 1.8, 0.1]
-      high_penalty: ["choice", [1, 2, 5, 10, 25, 100, 1000]]
+      high_penalty: ["choice", [0.5, 1, 2, 5, 10, 25, 100, 1000]]
   
