@@ -40,6 +40,7 @@ class MMVecEnv(gym.Env):
         # other params
         column_mapping={},  # which columns are what
         use_copy_envs=False,
+        reset_metrics_on_reset=True,
         **kwargs,
     ):
         self.data = data
@@ -123,7 +124,7 @@ class MMVecEnv(gym.Env):
         #     self.attribute_list.append(k)
         # NOTE: NEW
         # instead of setting attributes individually, have a single external_obs attribute
-
+        self.reset_metrics_on_reset = reset_metrics_on_reset
         self.mid_price = self.data[:, self.column_mapping["mid_price"]]
         self.best_bid = self.data[:, self.column_mapping["best_bid"]]
         self.best_ask = self.data[:, self.column_mapping["best_ask"]]
@@ -191,6 +192,11 @@ class MMVecEnv(gym.Env):
         self.bid_sizes = np.zeros(self.n_envs)
         self.asks = np.zeros(self.n_envs)
         self.ask_sizes = np.zeros(self.n_envs)
+
+        # some environments use metrics to measure performance, other times might want to record values for plotting
+        # this flag allows that operation to be turned off
+        if self.reset_metrics_on_reset:
+            self.reset_metrics()
 
         return self._get_observation()
 
@@ -311,7 +317,8 @@ class MMVecEnv(gym.Env):
         self.norm_inventory = np.round(
             self.inventory_qty
             / (self.inventory_qty + self.quote / self.mid_price[self.current_step])
-            - self.inventory_target, 5
+            - self.inventory_target,
+            5,
         ).reshape(-1, 1)
         if isinstance(self.obs_space, LinearObservation):
             val = self.external_obs[self.current_step]
@@ -386,13 +393,15 @@ class MMVecEnv(gym.Env):
             "market_trades": self.trade_market,
             "limit_trades": self.trade_limit,
         }
-    
+
     def get_recorded_values_to_df(self):
         raw_values = self.get_raw_recorded_values()
         df_dict = {
-            "values": np.array(raw_values["values"]).reshape(1,-1)[0],
-            "inventory_values": np.array(raw_values["inventory_values"]).reshape(1,-1)[0],
-            "inventory_qty": np.array(raw_values["inventory_qty"]).reshape(1,-1)[0],
+            "values": np.array(raw_values["values"]).reshape(1, -1)[0],
+            "inventory_values": np.array(raw_values["inventory_values"]).reshape(1, -1)[
+                0
+            ],
+            "inventory_qty": np.array(raw_values["inventory_qty"]).reshape(1, -1)[0],
         }
         return pd.DataFrame(df_dict)
 
