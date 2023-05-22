@@ -3,7 +3,7 @@
 # ----------OVERRIDE----------
 run_name: null
 samples: 1000
-trial_run: True
+trial_run: False
 
 # ----------report table----------
 reporter: 
@@ -18,7 +18,7 @@ reporter:
     - "max_inventory"
     - "duration"
   sort_metric: "trial_reward"
-  report_frequency: 60 # seconds
+  report_frequency: 240 # seconds
   report_rows: 30
   mode: min # aggregation mode
 
@@ -116,7 +116,7 @@ search_space:
     risk_aversion: 0.2
     order_size: 1
       
-  # ----------TUNING----------
+  # ----------EVAL----------
   tuning:
     timesteps: 10_000_000
     callback:
@@ -128,4 +128,4 @@ search_space:
       improvement_thresh: 0.01
       time_envs: 1
       inv_envs: 1
-      eval_mode: return/inventory
+      eval_mode: return/inventory # what mode used in callback to evaluate performance
