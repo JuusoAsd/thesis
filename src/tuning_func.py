@@ -1,4 +1,5 @@
 import os
+import warnings
 from datetime import datetime, timedelta
 import logging
 import time
@@ -29,6 +30,10 @@ from src.environments.env_configs.callbacks import ExternalMeasureCallback
 
 
 os.environ["TUNE_DISABLE_STRICT_METRIC_CHECKING"] = "1"
+# Filter out warnings from stable baselines
+# We recommend using a `batch_size` that is a factor of `n_steps * n_envs`.
+# https://stable-baselines3.readthedocs.io/en/master/_modules/stable_baselines3/ppo/ppo.html
+warnings.filterwarnings("ignore", category=UserWarning, module="stable_baselines3")
 
 
 def objective_simple(

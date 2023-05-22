@@ -2,11 +2,6 @@ import os
 import sys
 import warnings
 
-# Filter out warnings from stable baselines
-# We recommend using a `batch_size` that is a factor of `n_steps * n_envs`.
-# https://stable-baselines3.readthedocs.io/en/master/_modules/stable_baselines3/ppo/ppo.html
-warnings.filterwarnings("ignore", category=UserWarning, module="stable_baselines3")
-
 
 sys.path.append(f"{os.getcwd()}/gradu")
 
@@ -42,7 +37,7 @@ if __name__ == "__main__":
         func(*args.args)
     except KeyError as e:
         raise ValueError(
-            f"Unknown method: {args.method}. Please choose either from {list(func_dict.keys())} {e}"
+            f"Unknown method: {args.method}. Please choose either from {list(func_dict.keys())}"
         )
     except Exception as e:
         raise e
