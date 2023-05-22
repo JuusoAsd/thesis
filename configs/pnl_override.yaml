@@ -1,0 +1,17 @@
+run_name: pnl_reward
+searcher:
+  initial_values:
+    env:
+      reward_params:
+        inventory_threshold: 0.8
+        high_penalty: 100
+
+# ----------SEARCH----------
+search_space:
+  run_name: ${run_name}
+  env: 
+    reward_space: pnl 
+    reward_params:
+      inventory_threshold: ["quniform", 0.1, 1.8, 0.1]
+      high_penalty: ["choice", [1, 2, 5, 10, 25, 100, 1000]]
+  

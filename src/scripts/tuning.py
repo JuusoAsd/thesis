@@ -8,23 +8,29 @@ from omegaconf import OmegaConf
 from ray import tune
 from ray.tune import CLIReporter
 from ray.air.config import RunConfig
-from ray.tune.search.repeater import Repeater
+
+# from ray.tune.search.repeater import Repeater
+from src.environments.env_configs.callbacks import CustomRepeater
 from ray.tune.search.hyperopt import HyperOptSearch
 
-from src.util import create_parameter_space, flatten_config, get_config, trial_namer
+from src.util import (
+    create_parameter_space,
+    flatten_config,
+    get_config,
+    trial_namer,
+    check_config_null,
+)
 from src.tuning_func import objective_preload_repeat
 from src.environments.env_configs.callbacks import GroupRewardCallback
-import ray
-ray.init()
 
 os.environ["TUNE_DISABLE_STRICT_METRIC_CHECKING"] = "1"
 
 
-def tune_action_func_selection():
-    config = get_config("tuning_preload_repeat")
+def tune_action_func_selection(config):
     if config.trial_run:
         short_override = get_config("short_run_override")
         config = OmegaConf.merge(config, short_override)
+    check_config_null(config)
     search_space = create_parameter_space(config.search_space)
     flat_config = flatten_config(search_space)
 
@@ -48,12 +54,14 @@ def tune_action_func_selection():
         mode="max",
         metric=config.searcher.metric,
     )
-    repeater = Repeater(search_algo, set_index=True, repeat=config.searcher.repeats)
-    callback = GroupRewardCallback(repeater=repeater, mode=config.searcher.mode)
+    repeater = CustomRepeater(
+        search_algo,
+        set_index=True,
+        repeat=config.searcher.repeats,
+        aggregation=config.searcher.aggregation,
+    )
+    callback = GroupRewardCallback(repeater=repeater, mode=config.searcher.aggregation)
 
-    # available_cpus = int(ray.cluster_resources()['CPU'])
-    # num_cpus = int(available_cpus - 1 if available_cpus >= 20 else available_cpus)
-    # trainable = tune.with_resources(objective_preload_repeat, dict(cpu=num_cpus))
     trainable = objective_preload_repeat
     tuner = tune.Tuner(
         trainable=trainable,
@@ -72,5 +80,21 @@ def tune_action_func_selection():
         ),
     )
 
-
     tuner.fit()
+
+
+def tune_override(base_config, override_config):
+    base = get_config(base_config)
+    override = get_config(override_config)
+    config = OmegaConf.merge(base, override)
+    print(f"Running: {config.run_name}")
+    tune_action_func_selection(config)
+
+
+def tune_config(config):
+    config = get_config(config)
+    tune_action_func_selection(config)
+
+
+if __name__ == "__main__":
+    tune_override("tuning_preload_single_reward_base", "pnl_override")

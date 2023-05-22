@@ -23,8 +23,10 @@ class BaseRewardClass(ABC):
 
 
 class PnLReward(BaseRewardClass):
-    def __init__(self, env):
+    def __init__(self, env, inventory_threshold = 0.8, high_penalty=100):
         super().__init__(env)
+        self.inventory_threshold = inventory_threshold
+        self.high_penalty = high_penalty
 
     def start_step(self):
         self.value_start = self.env._get_value()
@@ -32,9 +34,9 @@ class PnLReward(BaseRewardClass):
     def end_step(self):
         self.value_end = self.env._get_value()
         profit = self.value_end - self.value_start
-        inventory_is_high = np.abs(self.env.norm_inventory) > 0.8
+        inventory_is_high = np.abs(self.env.norm_inventory) > self.inventory_threshold
 
-        profit -= inventory_is_high * 100
+        profit -= inventory_is_high *  self.high_penalty
         return profit
 
 

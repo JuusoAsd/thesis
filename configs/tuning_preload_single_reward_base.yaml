@@ -1,12 +1,13 @@
 
 # ----------SETUP----------
-run_name: preload_repeat
+# ----------OVERRIDE----------
+run_name: null
 samples: 1000
 trial_run: True
 
 # ----------report table----------
 reporter: 
-  parameter_columns: ["env.reward_space", "clone", "model.policy_kwargs.net_arch"]
+  parameter_columns: ["clone", "model.policy_kwargs.net_arch"]
   metric_columns:
     - "trial_group"
     - "trial_reward"
@@ -26,18 +27,18 @@ reporter:
 searcher:
   repeats: 8
   metric: "group_reward" # what metric searcher optimizes for
-  aggregation: min # used to determine aggregation function for repeated trials
+  aggregation: min # what is used as group reward aggregation TODO: Confirm this works like this and no need to use repeat
   initial_values:
     env:
       spaces: 
         observation_space:
           params: SimpleLinearSpace
-      reward: pnl
+      # ----------OVERRIDE----------
+      reward_space: null 
+      reward_params: null      
 
     clone: True
     model:
-      # algo: PPO
-      # policy: MlpPolicy
       model_params:
         learning_rate: 0.00035
         n_steps: 16
@@ -71,21 +72,14 @@ search_space:
       observation_space: 
         type: "linear"
         params: EverythingLinearSpace
-    reward_space: 
-      - choice
-      - - assymetric_pnl_dampening
-        - pnl
-        - inventory
-        - spreadpnl
-        - multistep_pnl
-        - inventory_integral_penalty
-        - simple_inventory_pnl_reward
     params:
       inv_envs: 4
       time_envs: 4
       data_portion: 0.5
       inv_jump: 0.18  
-
+    # ----------OVERRIDE----------
+    reward_space: null
+    reward_params: null
   venv:
     random: 1
 

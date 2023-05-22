@@ -1,10 +1,15 @@
 import logging
+from typing import Dict, Optional
 from ray import tune
 import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 
 from src.environments.env_configs.policies import ASPolicyVec
 from src.cloning import save_trained_model
+from ray.tune.search.repeater import Repeater
+from ray.tune.search import Searcher
+
+logger = logging.getLogger(__name__)
 
 
 class ExternalMeasureCallback(BaseCallback):
@@ -186,20 +191,18 @@ class ExternalMeasureCallback(BaseCallback):
             return aggregate
         elif self.eval_mode == "return-inventory**2":
             is_liquidated = metrics["max_inventory"] > 0.99
-            metric = metrics['episode_return'] - metrics['mean_abs_inv'] ** 2
-            aggregate = np.minimum(
-                metric, metric * (1 - is_liquidated)
-            )
+            metric = metrics["episode_return"] - metrics["mean_abs_inv"] ** 2
+            aggregate = np.minimum(metric, metric * (1 - is_liquidated))
             return np.min(aggregate)
         elif self.eval_mode == "return/inventory":
             is_liquidated = metrics["max_inventory"] > 0.99
-            metric = metrics['episode_return'] / (metrics['mean_abs_inv'] + 1e-6)
-            aggregate = np.minimum(
-                metric, metric * (1 - is_liquidated)
-            )
+            metric = metrics["episode_return"] / (metrics["mean_abs_inv"] + 1e-6)
+            aggregate = np.minimum(metric, metric * (1 - is_liquidated))
             return np.min(aggregate)
         else:
             raise NotImplementedError
+
+
 class GroupRewardCallback(tune.Callback):
     """
     callback keeps track of when trial group finishes and the reports the average result
@@ -237,3 +240,44 @@ class GroupRewardCallback(tune.Callback):
                 result = np.min(self.groups[group_id]["rewards"])
             for trial in self.groups[group_id]["trials"]:
                 trial.last_result["group_reward"] = result
+
+
+class CustomRepeater(Repeater):
+    def __init__(
+        self,
+        searcher: Searcher,
+        repeat: int = 1,
+        set_index: bool = True,
+        aggregation="mean",
+    ):
+        super(CustomRepeater, self).__init__(searcher, repeat)
+        self.aggregation = aggregation
+
+    def on_trial_complete(self, trial_id: str, result: Optional[Dict] = None, **kwargs):
+        if trial_id not in self._trial_id_to_group:
+            logger.error(
+                "Trial {} not in group; cannot report score. "
+                "Seen trials: {}".format(trial_id, list(self._trial_id_to_group))
+            )
+        trial_group = self._trial_id_to_group[trial_id]
+        if not result or self.searcher.metric not in result:
+            score = np.nan
+        else:
+            score = result[self.searcher.metric]
+        trial_group.report(trial_id, score)
+
+        if trial_group.finished_reporting():
+            scores = trial_group.scores()
+            if self.aggregation == "mean":
+                metric = np.nanmean(scores)
+            elif self.aggregation == "min":
+                metric = np.nanmin(scores)
+            elif self.aggregation == "mean/var":
+                metric = np.nanmean(scores) / (1 + np.nanvar(scores))
+            else:
+                raise NotImplementedError
+            self.searcher.on_trial_complete(
+                trial_group.primary_trial_id,
+                result={self.searcher.metric: metric},
+                **kwargs,
+            )

@@ -12,7 +12,7 @@ from stable_baselines3.common.utils import set_random_seed
 from hydra import compose, initialize_config_dir
 from dotenv import load_dotenv
 import pandas as pd
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf, ListConfig
 
 load_dotenv()
 
@@ -212,6 +212,27 @@ def locked_write_dataframe_to_csv(trial_name, filename, dataframe):
 
 def trial_namer(trial):
     return f"{trial.trainable_name[-4:]}_{trial.trial_id}"
+
+
+def check_config_null(cfg: DictConfig) -> None:
+    """
+    When config is a "base config" (i.e. a config that is used as a base for other configs),
+    null values should be used in place of something that will be overwritten by the child config.
+    This function checks that there are no null values in the config.
+    """
+    for key, value in cfg.items():
+        if isinstance(value, DictConfig):
+            # Recurse into nested DictConfig
+            check_config_null(value)
+        elif isinstance(value, ListConfig):
+            # Recurse into ListConfig
+            for item in value:
+                if isinstance(item, DictConfig):
+                    check_config_null(item)
+                elif item is None:
+                    raise ValueError(f"None value found in list at {key}")
+        elif value is None:
+            raise ValueError(f"None value found at {key}")
 
 
 if __name__ == "__main__":
