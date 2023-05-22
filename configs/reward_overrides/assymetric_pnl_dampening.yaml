@@ -18,5 +18,5 @@ search_space:
       inventory_threshold: ["quniform", 0.1, 1.8, 0.1]
       high_penalty: ["choice", [0.5, 1, 2, 5, 10, 25, 100, 1000]]
       dampening: ["choice", [0.5, 1, 2, 3, 5, 10]]
-      inventory_penalty: ["choice", [0.1, 0.2, 0.5, 1, 2]]s
+      inventory_penalty: ["choice", [0.1, 0.2, 0.5, 1, 2]]
       add_inventory_penalty: ["choice", [True, False]]

@@ -34,7 +34,6 @@ searcher:
         observation_space:
           params: SimpleLinearSpace
       # ----------OVERRIDE----------
-      reward_space: null 
       reward_params: null      
 
     clone: True

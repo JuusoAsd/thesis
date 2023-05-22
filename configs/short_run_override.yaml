@@ -1,4 +1,4 @@
-run_name: preload_repeat_test
+run_name: short_run_override_test
 samples: 9
 searcher:
   repeats: 3

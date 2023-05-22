@@ -85,9 +85,9 @@ def tune_action_func_selection(config):
 
 def tune_override(base_config, override_config):
     base = get_config(base_config)
-    override = get_config(override_config)
+    override = get_config(override_config, "reward_overrides")
     config = OmegaConf.merge(base, override)
-    print(f"Running: {config.run_name}")
+    check_config_null(config)
     tune_action_func_selection(config)
 
 

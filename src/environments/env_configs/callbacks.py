@@ -48,6 +48,7 @@ class ExternalMeasureCallback(BaseCallback):
             inv_jump=inv_jump,
             data_portion=time_data_portion,
         )
+        self.venv.env.reset_metrics_on_reset = False
         self.model_name = model_name
         self.save_model = save_best_model
         if self.save_model:

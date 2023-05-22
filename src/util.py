@@ -25,8 +25,13 @@ def set_seeds(seed):
     os.environ["PYTHONHASHSEED"] = "42"
 
 
-def get_config(name):
+def get_config(name, subdirectory=[]):
     config_path = os.environ.get("CONFIG_PATH")
+    if subdirectory != []:
+        if isinstance(subdirectory, str):
+            subdirectory = [subdirectory]
+        for sub in subdirectory:
+            config_path = os.path.join(config_path, sub)
     with initialize_config_dir(config_dir=config_path, version_base=None):
         cfg = compose(config_name=f"{name}.yaml")
     return cfg
@@ -214,25 +219,26 @@ def trial_namer(trial):
     return f"{trial.trainable_name[-4:]}_{trial.trial_id}"
 
 
-def check_config_null(cfg: DictConfig) -> None:
+def check_config_null(cfg: DictConfig, path: str = "") -> None:
     """
     When config is a "base config" (i.e. a config that is used as a base for other configs),
     null values should be used in place of something that will be overwritten by the child config.
     This function checks that there are no null values in the config.
     """
     for key, value in cfg.items():
+        new_path = f"{path}.{key}" if path else key
         if isinstance(value, DictConfig):
             # Recurse into nested DictConfig
-            check_config_null(value)
+            check_config_null(value, new_path)
         elif isinstance(value, ListConfig):
             # Recurse into ListConfig
-            for item in value:
+            for idx, item in enumerate(value):
                 if isinstance(item, DictConfig):
-                    check_config_null(item)
+                    check_config_null(item, f"{new_path}[{idx}]")
                 elif item is None:
-                    raise ValueError(f"None value found in list at {key}")
+                    raise ValueError(f"None value found in list at {new_path}[{idx}]")
         elif value is None:
-            raise ValueError(f"None value found at {key}")
+            raise ValueError(f"None value found at {new_path}")
 
 
 if __name__ == "__main__":
