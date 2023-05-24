@@ -30,8 +30,6 @@ if __name__ == "__main__":
         "args", nargs=argparse.REMAINDER, help="Positional arguments for the function"
     )
     args = parser.parse_args()
-    func = func_dict[args.method]
-    func(*args.args)
     try:
         func = func_dict[args.method]
         func(*args.args)
