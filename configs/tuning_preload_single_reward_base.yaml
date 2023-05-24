@@ -3,7 +3,7 @@
 # ----------OVERRIDE----------
 run_name: null
 samples: 1000
-trial_run: False
+trial_run: True
 
 # ----------report table----------
 reporter: 
