@@ -203,9 +203,9 @@ def de_flatten_config(config):
 import filelock
 
 
-def locked_write_dataframe_to_csv(trial_name, filename, dataframe):
-    path = os.getenv("TRIALS")
-    path = os.path.join(path, trial_name, f"{filename}.csv")
+def locked_write_dataframe_to_csv(filename, dataframe):
+    path = os.getenv("TRIAL_RESULTS")
+    path = os.path.join(path, f"{filename}.csv")
     lock_file = f"{path}.lock"
     with filelock.FileLock(lock_file):
         # Check if the file exists, and set the header option accordingly
@@ -213,6 +213,13 @@ def locked_write_dataframe_to_csv(trial_name, filename, dataframe):
 
         # Write the DataFrame to the CSV file, appending if the file exists
         dataframe.to_csv(path, mode="a", header=header, index=False)
+
+
+def remove_lock_files(filename):
+    path = os.getenv("TRIAL_RESULTS")
+    filepath = os.path.join(path, f"{filename}.csv.lock")
+    if os.path.exists(filepath):
+        os.remove(filepath)
 
 
 def trial_namer(trial):

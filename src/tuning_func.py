@@ -239,7 +239,7 @@ def objective_preload_repeat(config_dict):
         )
     tune_venv = setup_venv_config(config.eval_data, config.env, config.venv)
     callback = ExternalMeasureCallback(
-        data=eval_data.to_numpy(), venv=tune_venv, **config.tuning.callback
+        data=eval_data.to_numpy(), venv=tune_venv, **config.evaluation.callback
     )
     model.learn(
         total_timesteps=config.tuning.timesteps,
@@ -253,11 +253,11 @@ def objective_preload_repeat(config_dict):
     metrics["trial_group"] = run_hash
     reward_df = pd.DataFrame([metrics])
 
-    locked_write_dataframe_to_csv(config.run_name, "trial_results", reward_df)
+    locked_write_dataframe_to_csv(f"results_{config.run_name}", reward_df)
     config_dict["trial_group"] = run_hash
     config_df = pd.DataFrame([config_dict])
 
-    locked_write_dataframe_to_csv(config.run_name, "trial_parameters", config_df)
+    locked_write_dataframe_to_csv(f"parameters_{config.run_name}", config_df)
     return {
         "trial_group": run_hash,
         "trial_reward": metrics["trial_reward"],
@@ -265,7 +265,8 @@ def objective_preload_repeat(config_dict):
         "returns": metrics["episode_return"],
         "max_inventory": metrics["max_inventory"],
         "mean_abs_inv": metrics["mean_abs_inv"],
-        "duration": duration,
+        "mins": duration,
+        "evals": callback.eval_count,
     }
 
 

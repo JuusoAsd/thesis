@@ -16,23 +16,19 @@ reporter:
     - "returns"
     - "mean_abs_inv"
     - "max_inventory"
-    - "duration"
+    - "mins"
+    - "evals"
   sort_metric: "trial_reward"
   report_frequency: 240 # seconds
   report_rows: 30
-  mode: min # aggregation mode
-
 
 # ----------parameter searcher----------
 searcher:
   repeats: 8
   metric: "group_reward" # what metric searcher optimizes for
-  aggregation: min # what is used as group reward aggregation TODO: Confirm this works like this and no need to use repeat
+  aggregation: mean # what is used as group reward aggregation TODO: Confirm this works like this and no need to use repeat
   initial_values:
     env:
-      spaces: 
-        observation_space:
-          params: SimpleLinearSpace
       # ----------OVERRIDE----------
       reward_params: null      
 
@@ -86,7 +82,6 @@ search_space:
   clone: ["choice", [True, False]]
   model:
     algo: "PPO"
-    model_name: clone_large
     policy: MlpPolicy
     model_params:
         learning_rate: ["loguniform", 1e-5, 0.001]
@@ -116,16 +111,18 @@ search_space:
     risk_aversion: 0.2
     order_size: 1
       
-  # ----------EVAL----------
   tuning:
     timesteps: 10_000_000
+
+  # ----------EVAL----------
+  evaluation:
     callback:
       initial_expert: False
       save_best_model: False
-      wait: 50
-      freq: 5
-      patience: 6
+      wait: 10
+      freq: 3
+      patience: 20
       improvement_thresh: 0.01
-      time_envs: 1
+      time_envs: 6
       inv_envs: 1
-      eval_mode: return/inventory # what mode used in callback to evaluate performance
+      eval_mode: min_sharpe # what mode used in callback to evaluate performance of parallel environments (time x inventory)

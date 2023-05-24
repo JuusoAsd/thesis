@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 
 sys.path.append(f"{os.getcwd()}/gradu")
 
@@ -19,6 +20,7 @@ from src.util import (
     get_config,
     trial_namer,
     check_config_null,
+    remove_lock_files,
 )
 from src.tuning_func import objective_preload_repeat
 from src.environments.env_configs.callbacks import GroupRewardCallback
@@ -31,6 +33,8 @@ def tune_action_func_selection(config):
         short_override = get_config("short_run_override")
         config = OmegaConf.merge(config, short_override)
     check_config_null(config)
+    # create an unique run name
+    config.run_name = f"{config.run_name}_{int(time.time())}"
     search_space = create_parameter_space(config.search_space)
     flat_config = flatten_config(search_space)
 
@@ -39,7 +43,7 @@ def tune_action_func_selection(config):
         path = os.path.join(os.getenv("TRIALS"), config.run_name)
         if os.path.isdir(path):
             shutil.rmtree(path)
-        print("removed previous trials")
+            print("removed previous trials")
     reporter = CLIReporter(
         parameter_columns=config.reporter.parameter_columns,
         metric_columns=config.reporter.metric_columns,
@@ -81,6 +85,9 @@ def tune_action_func_selection(config):
     )
 
     tuner.fit()
+
+    # after trials, remove the lock files
+    [remove_lock_files(f"{i}_{config.run_name}") for i in ["results", "parameters"]]
 
 
 def tune_override(base_config, override_config):
