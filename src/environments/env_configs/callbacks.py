@@ -131,13 +131,11 @@ class ExternalMeasureCallback(BaseCallback):
                 # measure agent performance
                 self.venv.env.reset_metrics()
                 obs = self.venv.reset()
-
                 while True:
                     act = self.locals["self"].predict(obs, deterministic=True)[0]
                     obs, _, done, _ = self.venv.step(act)
                     if np.any(done):
                         break
-
                 performance_metrics = self.venv.env.get_metrics()
                 if self.best_performance_metrics == {}:
                     self.best_performance_metrics = {
@@ -162,12 +160,12 @@ class ExternalMeasureCallback(BaseCallback):
                     if self.patience <= 0:
                         self.continue_training = False
                         print(f"stopping training after {self.eval_count} evals")
-                mean_performance_metrics = {
-                    k: np.mean(v) for k, v in performance_metrics.items()
-                }
-                logging.debug(
-                    f"Evals: {self.eval_count}, patience: {self.patience} agent reward: {agent_reward}, best reward: {self.best_reward}, {mean_performance_metrics}"
-                )
+                # mean_performance_metrics = {
+                #     k: np.mean(v) for k, v in performance_metrics.items()
+                # }
+                # logging.debug(
+                #     f"Evals: {self.eval_count}, patience: {self.patience} agent reward: {agent_reward}, best reward: {self.best_reward}, {mean_performance_metrics}"
+                # )
 
         return True
 
@@ -186,10 +184,10 @@ class ExternalMeasureCallback(BaseCallback):
             return np.min(aggregate)
         elif self.eval_mode == "mean_sharpe":
             is_liquidated = metrics["max_inventory"] > 0.99
-            aggregate = np.mean(
-                [metrics["sharpe"], metrics["sharpe"] * (1 - is_liquidated)]
+            aggregate = np.minimum(
+                metrics["sharpe"], metrics["sharpe"] * (1 - is_liquidated)
             )
-            return aggregate
+            return np.mean(aggregate)
         elif self.eval_mode == "return-inventory**2":
             is_liquidated = metrics["max_inventory"] > 0.99
             metric = metrics["episode_return"] - metrics["mean_abs_inv"] ** 2
@@ -198,6 +196,11 @@ class ExternalMeasureCallback(BaseCallback):
         elif self.eval_mode == "return/inventory":
             is_liquidated = metrics["max_inventory"] > 0.99
             metric = metrics["episode_return"] / (metrics["mean_abs_inv"] + 1e-6)
+            aggregate = np.minimum(metric, metric * (1 - is_liquidated))
+            return np.min(aggregate)
+        elif self.eval_mode == "return/(1+inventory)":
+            is_liquidated = metrics["max_inventory"] > 0.99
+            metric = metrics["episode_return"] / (1 + metrics["mean_abs_inv"])
             aggregate = np.minimum(metric, metric * (1 - is_liquidated))
             return np.min(aggregate)
         else:

@@ -50,4 +50,3 @@ env_multi:
       time_envs: 1
       n_envs: 5
       use_copy_envs: True
-

@@ -21,6 +21,7 @@ from src.environments.env_configs.spaces import (
     LinearObservation,
 )
 from src.environments.env_configs.callbacks import ExternalMeasureCallback
+from src.cloning import load_model_by_config
 
 config = get_test_config("test_env")
 test_data = {
@@ -111,3 +112,52 @@ def test_external_measure_callback(caplog):
     callback._on_rollout_end()
     assert callback.eval_count == 1
     callback._on_rollout_end()
+
+
+def test_run_rollout_end():
+    config = get_test_config("test_callbacks")
+    venv = setup_venv_config(config.data, config.env, config.venv)
+    model = load_model_by_config(config, venv)
+    data = get_data_by_dates(**config.data)
+    callback = ExternalMeasureCallback(
+        data.to_numpy(), venv, wait=2, freq=1, patience=1, eval_mode="return/inventory"
+    )
+    callback.__setattr__("locals", {"self": model})
+
+    callback._on_rollout_end()
+    callback._on_rollout_end()
+
+    # trigger first evaluation
+    callback._on_rollout_end()
+    best = callback.best_reward
+    metrics = callback.best_performance_metrics
+    assert best == metrics["episode_return"] / (1e-6 + metrics["mean_abs_inv"])
+
+
+def test_run_rollout_end_parallel():
+    config = get_test_config("test_callbacks")
+    venv = setup_venv_config(config.data, config.env, config.venv)
+
+    model = load_model_by_config(config, venv)
+    data = get_data_by_dates(**config.data)
+    callback = ExternalMeasureCallback(
+        data.to_numpy(),
+        venv,
+        wait=2,
+        freq=1,
+        patience=1,
+        eval_mode="min_sharpe",
+        **config.parallel_callback
+    )
+    callback.__setattr__("locals", {"self": model})
+
+    callback._on_rollout_end()
+    callback._on_rollout_end()
+
+    # trigger first evaluation
+    callback._on_rollout_end()
+    best = callback.best_reward
+    metrics = callback.best_performance_metrics
+
+    print(best)
+    print(metrics)
