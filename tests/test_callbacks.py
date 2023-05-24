@@ -73,7 +73,7 @@ def test_get_performance_liquidated_single():
         "max_inventory": np.array([1]),
     }
     performance_metric = callback.get_performance(metrics)
-    assert performance_metric == 0
+    assert performance_metric == -1000
 
 
 def test_get_performance_ok_multiple():
@@ -91,7 +91,7 @@ def test_get_performance_liquidated_multiple():
         "max_inventory": np.array([1, 0.5]),
     }
     performance_metric = callback.get_performance(metrics)
-    assert performance_metric == 0
+    assert performance_metric == -1000
 
 
 def test_external_measure_callback(caplog):

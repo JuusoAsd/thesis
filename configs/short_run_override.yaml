@@ -5,6 +5,7 @@ searcher:
 search_space:
   tuning:
     timesteps: 10_0000
+  evaluation:
     callback:
       initial_expert: False
       save_best_model: False
