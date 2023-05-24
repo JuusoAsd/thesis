@@ -179,7 +179,8 @@ class ExternalMeasureCallback(BaseCallback):
         if self.eval_mode == "min_sharpe":
             is_liquidated = metrics["max_inventory"] > 0.99
             aggregate = np.minimum(
-                metrics["sharpe"], metrics["sharpe"] * (1 - is_liquidated)
+                metrics["sharpe"],
+                metrics["sharpe"] * (1 - is_liquidated) - is_liquidated * 1000,
             )
             return np.min(aggregate)
         elif self.eval_mode == "mean_sharpe":

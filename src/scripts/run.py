@@ -32,10 +32,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
     try:
         func = func_dict[args.method]
-        func(*args.args)
     except KeyError as e:
         raise ValueError(
             f"Unknown method: {args.method}. Please choose either from {list(func_dict.keys())}"
         )
     except Exception as e:
+        raise e
+
+    try:
+        func(*args.args)
+    except Exception as e:
+        warnings.warn(f"Error in {args.method} while running: {e}")
         raise e
