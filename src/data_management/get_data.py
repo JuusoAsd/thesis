@@ -57,7 +57,7 @@ def get_data_by_dates(
         df = pd.read_csv(files[0])
         for file in files[1:]:
             df = pd.concat([df, pd.read_csv(file)])
-        df.sort_values(by="timestamp", inplace=True)
+        df.sort_values(by="timestamp", inplace=True).reset_index(drop=True)
         return df
     except Exception as e:
         raise Exception(f"Error reading files: {e}")
