@@ -54,7 +54,7 @@ search_space:
   # ----------ENVIRONMENT----------
   train_data:
     start_date: "2021_12_21"
-    end_date: "2022_01_12"
+    end_date: "2022_01_10"
   eval_data:
     start_date: "2022_01_22"
     end_date: "2022_01_30"

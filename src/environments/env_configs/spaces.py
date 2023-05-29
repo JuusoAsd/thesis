@@ -120,7 +120,7 @@ class LinearObservationSpaces(Enum):
     SimpleLinearSpace = {
         "inventory": create_space(-1, 1, -2, 2, False),
         "volatility": create_space(-1, 1, 0, 0.01, True),
-        "intensity": create_space(-1, 1, 0, 100_000, True),
+        "intensity": create_space(-1, 1, 0, 25_000, True),
     }
 
     OSILinearSpace = {
