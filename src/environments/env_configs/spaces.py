@@ -52,6 +52,15 @@ class ActionSpace(Enum):
     )
 
 
+def get_action_space_keys(action_space):
+    key_dict = {
+        ActionSpace.NormalizedAction: ["bid_size", "ask_size", "bid", "ask"],
+        ActionSpace.NormalizedIntegerAction: ["bid_size", "ask_size", "bid", "ask"],
+        ActionSpace.NoSizeAction: ["bid", "ask"],
+    }
+    return key_dict[action_space]
+
+
 class ObservationSpace(Enum):
     # Enum for different possible observation spaces
     ASObservation = (
@@ -247,8 +256,7 @@ class LinearObservation:
                 step = distance / (n)
                 values = [i for i in np.arange(min_val, max_val + 1e-6, step)]
                 obs_values.append(values)
-                steps += 1
-
+            steps += 1
         grids = np.meshgrid(*obs_values, indexing="ij")
         grid_space = np.stack(grids, axis=-1).reshape(
             -1, len(self.obs_info_dict) - len(constant_values)
@@ -258,3 +266,6 @@ class LinearObservation:
             grid_space = np.insert(grid_space, variable_order[var], const_val, axis=1)
 
         return np.round(grid_space, 5)
+
+    def get_feature_names(self):
+        return list(self.func_dict.keys())

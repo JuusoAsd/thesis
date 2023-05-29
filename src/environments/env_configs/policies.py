@@ -143,7 +143,6 @@ class ASPolicyVec:
         ask = inventory_adjustment + spread / 2
         # ask_ticks = np.round((ask / self.tick_size) * 2, 0)
         ask_normalize = ask / self.max_diff
-
         return np.array(
             [bid_size_normalize, ask_size_normalize, bid_normalize, ask_normalize]
         ).T

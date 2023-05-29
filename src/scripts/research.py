@@ -31,6 +31,7 @@ from src.environments.env_configs.spaces import (
     ObservationSpace,
     LinearObservation,
     LinearObservationSpaces,
+    get_action_space_keys,
 )
 from stable_baselines3.common.vec_env import VecEnv
 from src.environments.env_configs.policies import ASPolicyVec
@@ -57,15 +58,40 @@ def create_model_decision_grid():
         config.decision_grid.distinct_count_per_variable,
         constant_values=config.decision_grid.constant_values,
     )
-    print(f"OBSERVATIONS")
-    print(obs_grid)
-    # get a model
-    model = load_trained_model(
-        config.decision_grid.model_name,
-        venv,
-        normalize=False,
-        model_kwargs=config.decision_grid.model_kwargs,
-    )
-    print("ACTIONS")
-    act, _ = model.predict(obs_grid, deterministic=True)
-    print(act)
+    expert = ASPolicyVec(env=venv.env, **config.expert_params)
+    expert.n_envs = len(obs_grid)
+    act_func = expert.get_action_func()
+
+    if config.policy == "ml":
+        # get a model
+        model = load_trained_model(
+            config.decision_grid.model_name,
+            venv,
+            normalize=False,
+            model_kwargs=config.decision_grid.model_kwargs,
+        )
+        act, _ = model.predict(obs_grid, deterministic=True)
+        act_df = pd.DataFrame(act, columns=get_action_space_keys(venv.env.act_space))
+    elif config.policy == "as":
+        # get a matching AS policy
+        act = act_func(obs_grid)
+        act_df = pd.DataFrame(act, columns=get_action_space_keys(venv.env.act_space))
+    elif config.policy == "both":
+        model = load_trained_model(
+            config.decision_grid.model_name,
+            venv,
+            normalize=False,
+            model_kwargs=config.decision_grid.model_kwargs,
+        )
+        model_act, _ = model.predict(obs_grid, deterministic=True)
+        as_act = act_func(obs_grid)
+
+        keys = get_action_space_keys(venv.env.act_space)
+        model_act_df = pd.DataFrame(model_act, columns=[f"ml_policy_{i}" for i in keys])
+        as_act_df = pd.DataFrame(as_act, columns=[f"as_policy_{i}" for i in keys])
+        act_df = pd.concat([model_act_df, as_act_df], axis=1)
+
+    obs_df = pd.DataFrame(obs_grid, columns=venv.env.obs_space.get_feature_names())
+
+    df = pd.concat([obs_df, act_df], axis=1)
+    df.to_csv(os.path.join(os.getenv("RESULT_PATH"), "decision_grid.csv"), index=False)
