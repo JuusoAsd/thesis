@@ -169,9 +169,11 @@ class ASPolicyVec:
 
     def get_no_size_action_linear(self, observation):
         # the input is normalized
-        self.space = LinearObservation(LinearObservationSpaces.SimpleLinearSpace)
-
-        obs_converted = self.space.convert_to_readable(observation)
+        obs_converted = self.obs_type.convert_to_readable(observation)
+        if self.obs_type.space_type == LinearObservationSpaces.EverythingLinearSpaceAS:
+            # 2 first columns are not inventory and vol but bid and ask size
+            obs = obs_converted[:, 2:]
+            return self.get_action_no_mid_no_size(obs)
         return self.get_action_no_mid_no_size(obs_converted)
 
     def get_action_no_mid_linear(self, observation):

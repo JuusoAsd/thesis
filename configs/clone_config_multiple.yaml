@@ -4,22 +4,8 @@ clone_data:
 
 verify_cloning_data:
   start_date: "2021_12_27"
-  end_date: "2021_12_31"
-  
-env: 
-    spaces:
-      action_space: NormalizedAction
-      observation_space: 
-        type: "linear"
-        params: EverythingLinearSpace
-    reward_space: inventory_integral_penalty 
-    params:
-      inv_envs: 4
-      time_envs: 4
-      data_portion: 0.5
-      inv_jump: 0.18  
-venv:
-    random: 1
+  # end_date: "2021_12_28"
+
 
 expert_params:
   max_order_size: 5
@@ -30,10 +16,35 @@ expert_params:
   risk_aversion: 0.2
   order_size: 1
 
+env: 
+    spaces:
+      action_space: NoSizeAction
+      observation_space: 
+        type: "linear"
+        params: EverythingLinearSpaceAS
+    reward_space: inventory_integral_penalty 
+    params:
+      inv_envs: 4
+      time_envs: 4
+      data_portion: 0.5
+      inv_jump: 0.18
+      as_expert_params:
+        max_order_size: 5
+        tick_size: 0.0001
+        max_ticks: 10
+        price_decimals: 4
+        inventory_target: 0
+        risk_aversion: 0.2
+        order_size: 1
+venv:
+    random: 1
+
+compare: True
+
+
+
 policy_kwargs:
   - net_arch: [32, 32]
-  - net_arch: [64, 64]
-  - net_arch: [128, 128]
   - net_arch: [256, 256]
   - net_arch: [512, 512]
   - net_arch: {"pi": [64,64] ,"vf": [64,64]}

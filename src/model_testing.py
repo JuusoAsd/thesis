@@ -87,28 +87,27 @@ def trained_vs_manual(venv, model, save_values=False, result_file="", date=""):
     }
 
     expert = expert_policy(env=expert_venv.env, **expert_params)
+
     action_func = expert.get_action_func()
     obs_model = venv.reset()
     obs_expert = expert_venv.reset()
-    done = False
     n_steps = 0
+    venv.env.reset_metrics_on_reset = False
+    expert_venv.env.reset_metrics_on_reset = False
+    venv.reset()
     while True:
         action_model = model.predict(obs_model, deterministic=True)[0]
         action_expert = action_func(obs_expert)
-
-        obs_model, _, done_model, _ = venv.step(action_model)
+        obs_model, _, _, _ = venv.step(action_model)
         obs_expert, _, done_expert, _ = expert_venv.step(action_expert)
-
         n_steps += 1
         if done_expert:
             break
-
 
     # metrics = venv.env.get_metrics()
     # if metrics["max_inventory"] == 0:
     #     logging.error("Zero inventory run")
     #     return
-
     model_metrics = venv.env.get_metrics_val()
     expert_metrics = expert_venv.env.get_metrics_val()
     if save_values:

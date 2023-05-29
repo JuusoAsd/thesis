@@ -226,7 +226,14 @@ def objective_preload_repeat(config_dict):
 
     eval_data = get_data_by_dates(**config.eval_data)
     if config.clone:
-        model_hash = create_config_hash(config.model.policy_kwargs)
+        hash_config = OmegaConf.create(
+            {
+                "policy_kwargs": config.model.policy_kwargs,
+                "action": config.env.spaces.action_space,
+                "observation": config.env.spaces.observation_space.params,
+            }
+        )
+        model_hash = create_config_hash(hash_config)
         config.model.model_name = model_hash
         model = load_model_by_config(config, venv)
     else:

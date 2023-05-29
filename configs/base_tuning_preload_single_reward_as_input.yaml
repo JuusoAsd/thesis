@@ -1,0 +1,134 @@
+
+# ----------SETUP----------
+# ----------OVERRIDE----------
+run_name: null
+samples: 1000
+trial_run: False
+
+# ----------report table----------
+reporter: 
+  parameter_columns: ["clone", "model.policy_kwargs.net_arch"]
+  metric_columns:
+    - "trial_group"
+    - "trial_reward"
+    - "group_reward"
+    - "sharpe"
+    - "returns"
+    - "mean_abs_inv"
+    - "max_inventory"
+    - "mins"
+    - "evals"
+  sort_metric: "trial_reward"
+  report_frequency: 240 # seconds
+  report_rows: 30
+
+# ----------parameter searcher----------
+searcher:
+  repeats: 8
+  metric: "group_reward" # what metric searcher optimizes for
+  aggregation: mean # what is used as group reward aggregation TODO: Confirm this works like this and no need to use repeat
+  initial_values:
+    env:
+      # ----------OVERRIDE----------
+      reward_params: null      
+    clone: True
+    model:
+      model_params:
+        learning_rate: 0.0002682810046323
+        n_steps: 32
+        batch_size: 128
+        n_epochs: 20
+        gamma: 0.9999
+        gae_lambda: 0.95
+        clip_range: 0.2
+        normalize_advantage: false
+        ent_coef: 0.2
+        vf_coef: 0.1549328961384911
+        max_grad_norm: 5.0
+        sde_sample_freq: 8
+
+
+# ----------SEARCH----------
+search_space:
+  run_name: ${run_name}
+  # ----------ENVIRONMENT----------
+  train_data:
+    start_date: "2021_12_21"
+    end_date: "2022_01_12"
+  eval_data:
+    start_date: "2022_01_22"
+    end_date: "2022_01_30"
+
+  env: 
+    spaces:
+      action_space: NoSizeAction
+      observation_space: 
+        type: "linear"
+        params: EverythingLinearSpaceAS
+    params:
+      inv_envs: 4
+      time_envs: 4
+      data_portion: 0.5
+      inv_jump: 0.18  
+      as_expert_params:
+        max_order_size: 5
+        tick_size: 0.0001
+        max_ticks: 10
+        price_decimals: 4
+        inventory_target: 0
+        risk_aversion: 0.2
+        order_size: 1
+    # ----------OVERRIDE----------
+    reward_space: null
+    reward_params: null
+  venv:
+    random: 1
+
+  # ----------MODEL----------
+  clone: ["choice", [True, False]]
+  model:
+    algo: "PPO"
+    policy: MlpPolicy
+    model_params:
+        learning_rate: ["loguniform", 1e-5, 0.001]
+        n_steps: ["choice", [4, 8, 16, 32, 64, 128, 256, 512, 1024]]
+        batch_size: ["choice", [32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]]
+        n_epochs: ["choice", [1, 5, 10, 20]]
+        gamma: ["choice", [0.995, 0.999, 0.9995, 0.9999]]
+        gae_lambda: ["choice", [0.8, 0.9, 0.92, 0.95, 0.98, 0.99, 1.0]]
+        clip_range: ["choice", [0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 0.9, 1.0]]
+        clip_range_vf: ["choice", [null, 0.1, 0.2, 0.3, 0.5]]
+        normalize_advantage: ["choice", [True, False]]
+        ent_coef: ["choice", [0, 1e-8, 1e-5, 0.01, 0.1, 0.2, 0.4, 0.5]]
+        vf_coef: ["uniform", 0, 1]
+        max_grad_norm: ["choice", [0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 5]]
+        sde_sample_freq: ["choice", [-1, 4, 8, 16, 32, 64, 128, 256]]
+
+    policy_kwargs: 
+      net_arch: ["choice", [[32, 32], [256, 256], [512, 512], {"pi": [64,64] ,"vf": [64,64]}, {"vf": [256,256], "pi": [256,256]}]]
+
+  # ----------EXPERT----------
+  expert_params:
+    max_order_size: 5
+    tick_size: 0.0001
+    max_ticks: 10
+    price_decimals: 4
+    inventory_target: 0
+    risk_aversion: 0.2
+    order_size: 1
+      
+  tuning:
+    timesteps: 10_000_000
+
+  # ----------EVAL----------
+  evaluation:
+    callback:
+      initial_expert: False
+      save_best_model: False
+      wait: 10
+      freq: 20
+      patience: 6
+      improvement_thresh: 0.01
+      time_envs: 6
+      inv_envs: 1
+      eval_mode: min_sharpe # what mode used in callback to evaluate performance of parallel environments (time x inventory)

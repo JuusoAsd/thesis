@@ -199,10 +199,6 @@ class LinearObservation:
     def convert_to_readable(self, obs_array):
         # convert from normalized to actual
         calculated_values = self.slopes * obs_array + self.intercepts
-        # NOTE: no clipping done here because we want to see the actual values
-        # actual_obs = np.minimum(
-        #     np.maximum(calculated_values, self.mins_actual.T), self.maxs_actual.T
-        # )
         return calculated_values
 
     def get_correct_order(self):

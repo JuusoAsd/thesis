@@ -3,7 +3,7 @@
 # ----------OVERRIDE----------
 run_name: null
 samples: 1000
-trial_run: False
+trial_run: True
 
 # ----------report table----------
 reporter: 
@@ -31,23 +31,21 @@ searcher:
     env:
       # ----------OVERRIDE----------
       reward_params: null      
-
     clone: True
     model:
       model_params:
-        learning_rate: 0.00035
-        n_steps: 16
-        batch_size: 512
-        n_epochs: 5
-        gamma: 0.999
+        learning_rate: 0.0002682810046323
+        n_steps: 32
+        batch_size: 128
+        n_epochs: 20
+        gamma: 0.9999
         gae_lambda: 0.95
-        clip_range: 0.3
-        clip_range_vf: 0.2
-        normalize_advantage: True
-        ent_coef: 1e-5
-        vf_coef: 0.65
-        max_grad_norm: 0.5
-        sde_sample_freq: 32
+        clip_range: 0.2
+        normalize_advantage: false
+        ent_coef: 0.2
+        vf_coef: 0.1549328961384911
+        max_grad_norm: 5.0
+        sde_sample_freq: 8
 
 
 # ----------SEARCH----------
@@ -63,7 +61,7 @@ search_space:
 
   env: 
     spaces:
-      action_space: NormalizedAction
+      action_space: NoSizeAction
       observation_space: 
         type: "linear"
         params: EverythingLinearSpace

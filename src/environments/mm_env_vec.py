@@ -137,6 +137,14 @@ class MMVecEnv(gym.Env):
         if isinstance(self.obs_space, ObservationSpace):
             self.observation_space = self.obs_space.value
         elif isinstance(self.obs_space, LinearObservation):
+            if (
+                self.obs_space.space_type
+                == LinearObservationSpaces.EverythingLinearSpaceAS
+            ):
+                if as_expert_params == {}:
+                    raise ValueError(
+                        "Using EverythingLinearSpaceAS but no as_expert_params given"
+                    )
             self.observation_space = self.obs_space.obs_space
             self.external_obs = self.data[
                 :, [self.column_mapping[i] for i in self.obs_space.external]
@@ -178,6 +186,7 @@ class MMVecEnv(gym.Env):
             "column_mapping": self.column_mapping,
             "action_space": self.act_space,
             "observation_space": self.obs_space,
+            "as_expert_params": self.as_expert_params,
         }
 
     def reset(self):
@@ -322,6 +331,8 @@ class MMVecEnv(gym.Env):
         self.spread += sell_spread + buy_spread
 
     def _get_observation(self):
+        import time
+
         # logging.debug(
         #     f"inventory: {self.inventory_qty}, quote: {self.quote}, mid: {self.mid_price[self.current_step]}"
         # )
