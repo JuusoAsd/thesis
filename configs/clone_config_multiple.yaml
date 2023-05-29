@@ -44,8 +44,9 @@ compare: True
 
 
 policy_kwargs:
-  - net_arch: [32, 32]
-  - net_arch: [256, 256]
-  - net_arch: [512, 512]
-  - net_arch: {"pi": [64,64] ,"vf": [64,64]}
-  - net_arch: {"vf": [256,256], "pi": [256,256]}
+  # - net_arch: [32, 32]
+  # - net_arch: [256, 256]
+  # - net_arch: [512, 512]
+  # - net_arch: {"pi": [64,64] ,"vf": [64,64]}
+  # - net_arch: {"vf": [256,256], "pi": [256,256]}
+  - net_arch: [128, 128, 128, 128]

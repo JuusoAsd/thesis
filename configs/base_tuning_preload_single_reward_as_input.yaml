@@ -54,7 +54,7 @@ search_space:
   # ----------ENVIRONMENT----------
   train_data:
     start_date: "2021_12_21"
-    end_date: "2022_01_10"
+    end_date: "2022_01_10 "
   eval_data:
     start_date: "2022_01_22"
     end_date: "2022_01_30"
@@ -105,7 +105,8 @@ search_space:
         sde_sample_freq: ["choice", [-1, 4, 8, 16, 32, 64, 128, 256]]
 
     policy_kwargs: 
-      net_arch: ["choice", [[32, 32], [256, 256], [512, 512], {"pi": [64,64] ,"vf": [64,64]}, {"vf": [256,256], "pi": [256,256]}]]
+      net_arch: [128, 128, 128, 128]
+      # net_arch: ["choice", [[32, 32], [256, 256], [512, 512], {"pi": [64,64] ,"vf": [64,64]}, {"vf": [256,256], "pi": [256,256]}]]
 
   # ----------EXPERT----------
   expert_params:
