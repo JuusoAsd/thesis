@@ -73,11 +73,26 @@ def load_model_by_config_hash(config, venv):
     return model
 
 
+def save_model(model, model_name, sub_directories=[]):
+    dir = os.getenv("COMMON_PATH")
+    for i in sub_directories:
+        dir = os.path.join(dir, i)
+    path = Path(os.path.join(dir, model_name))
+    model.save(path)
+
+
+def load_model(model_name, venv, sub_directories=[]):
+    dir = os.getenv("COMMON_PATH")
+    for i in sub_directories:
+        dir = os.path.join(dir, i)
+    path = Path(os.path.join(dir, model_name))
+    model = PPO.load(path, env=venv)
+    return model
+
+
 def load_model_by_config(config, venv):
     # .zip is not appended to the path here for some reason????
-    path = Path(
-        f"{os.getenv('COMMON_PATH')}/models/{config.model.model_name}"
-    )
+    path = Path(f"{os.getenv('COMMON_PATH')}/models/{config.model.model_name}")
     model = PPO.load(path, env=venv)
     return model
 

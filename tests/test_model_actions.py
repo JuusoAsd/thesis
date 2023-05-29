@@ -65,7 +65,7 @@ def test_cloning():
     venv = setup_venv_config(config.data, config.env, config.venv)
 
     model = PPO("MlpPolicy", venv, verbose=0)
-    expert_policy = ASPolicyVec(venv.env, **config.expert_params)
+    expert_policy = ASPolicyVec(env=venv.env, **config.expert_params)
     action_func = expert_policy.get_action_func()
 
     obs = venv.reset()

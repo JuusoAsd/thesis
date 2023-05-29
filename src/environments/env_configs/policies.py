@@ -6,6 +6,7 @@ from src.environments.env_configs.spaces import (
     ActionSpace,
     ObservationSpace,
     LinearObservation,
+    LinearObservationSpaces,
 )
 
 
@@ -39,7 +40,6 @@ class PolicyBase(ABC):
 class ASPolicyVec:
     def __init__(
         self,
-        env,  # this should be the non-vectorized environment
         max_order_size,
         tick_size,
         max_ticks,
@@ -48,8 +48,20 @@ class ASPolicyVec:
         risk_aversion,
         order_size,
         max_diff=0.001,
+        env=None,  # this should be the non-vectorized environment
+        n_envs=1,
+        obs_type=None,
+        act_type=None,
     ):
-        self.env = env
+        if env is None:
+            self.obs_type = obs_type
+            self.act_type = act_type
+            self.n_envs = n_envs
+        else:
+            self.env = env
+            self.n_envs = env.n_envs
+            self.obs_type = env.obs_space
+            self.act_type = env.act_space
         self.max_order_size = max_order_size
         self.tick_size = tick_size
         self.max_diff = max_diff
@@ -57,9 +69,7 @@ class ASPolicyVec:
         self.price_decimals = price_decimals
         self.inventory_target = inventory_target
         self.risk_aversion = risk_aversion
-        self.order_size = np.full(self.env.n_envs, order_size)
-        self.obs_type = env.obs_space
-        self.act_type = env.act_space
+        self.order_size = np.full(self.n_envs, order_size)
 
     def get_continuous_action(self, observation):
         """
@@ -111,8 +121,8 @@ class ASPolicyVec:
         bid_size = self.order_size
         ask_size = self.order_size
 
-        bid_size_normalize = np.full(self.env.n_envs, bid_size / self.max_order_size)
-        ask_size_normalize = np.full(self.env.n_envs, ask_size / self.max_order_size)
+        bid_size_normalize = np.full(self.n_envs, bid_size / self.max_order_size)
+        ask_size_normalize = np.full(self.n_envs, ask_size / self.max_order_size)
 
         inventory = observation[:, 0]
         vol = observation[:, 1]
@@ -159,22 +169,18 @@ class ASPolicyVec:
 
     def get_no_size_action_linear(self, observation):
         # the input is normalized
-        obs_dict = {
-            "inventory": observation[:, 0],
-            "volatility": observation[:, 1],
-            "intensity": observation[:, 2],
-        }
-        obs_dict_converted = self.obs_type.convert_to_readable(obs_dict)
-        obs = []
-        for i in ["inventory", "volatility", "intensity"]:
-            obs.append(obs_dict_converted[i])
-        return self.get_action_no_mid_no_size(np.array(obs).T)
+        self.space = LinearObservation(LinearObservationSpaces.SimpleLinearSpace)
+
+        obs_converted = self.space.convert_to_readable(observation)
+        return self.get_action_no_mid_no_size(obs_converted)
 
     def get_action_no_mid_linear(self, observation):
         obs_dict_converted = self.obs_type.convert_to_readable(observation)
         return self.get_action_no_mid(obs_dict_converted)
 
     def get_action_func(self):
+        if self.obs_type is None or self.act_type is None:
+            raise ValueError("obs_type and act_type must be set to get action func")
         if isinstance(self.obs_type, ObservationSpace):
             action_func_dict = {
                 (

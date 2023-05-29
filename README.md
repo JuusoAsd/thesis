@@ -29,7 +29,7 @@ start by connecting vpn (vpn1.aalto.fi)
 - ssh triton
 - rsync -avzc -e "ssh" hello.txt triton:/scratch/work/ahlrooj1/
 - rsync -avzc -e "ssh" triton:/scratch/work/ahlrooj1/trials/delta_inventory_pnlreward/trial_results.csv /Users/juusoahlroos/Documents/own/gradu/parsed_data/results
-- rsync -avzc -e "ssh" triton:/scratch/work/ahlrooj1/trials/delta_inventory_pnlreward/trial_parameters.csv /Users/juusoahlroos/Documents/own/gradu/parsed_data/results
+- rsync -avzc -e "ssh" triton:/scratch/work/ahlrooj1/trial_results /Volumes/ssd/gradu_data/exported_trial_results
 - sbatch FILEPATH
 
 

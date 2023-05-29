@@ -87,3 +87,7 @@ def test_denormalize_arrays_min_max():
     assert res[0].tolist() == [-2, 0, 0]
     assert res[1].tolist() == [2, 0.01, 100_000]
     assert res[2].tolist() == [0, 0.005, 50_000]
+
+
+# def test_space_input():
+#     space = LinearObservation(LinearObservationSpaces.SimpleLinearSpace)

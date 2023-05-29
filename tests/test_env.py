@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from numpy.testing import assert_allclose
+from src.environments.env_configs.policies import ASPolicyVec
 
 from dotenv import load_dotenv
 
@@ -210,3 +211,23 @@ def test_multi_env():
     assert obs.shape == (5, 3)
     assert reward.shape == (5,)
     assert done.shape == (5,)
+
+
+def test_everything_linear_as():
+    venv = setup_venv_config(config.data, config.env_everything_linear_as, config.venv)
+    obs = venv.reset()
+    expert_policy = ASPolicyVec(env=venv.env, **config.expert_params)
+    func = expert_policy.get_no_size_action_linear
+    obs_expert = func(obs[:, [2, 3, 4]])
+    assert obs_expert.tolist()[0] == obs.tolist()[0][:2]
+
+
+def test_everything_linear_as_parallel():
+    venv = setup_venv_config(
+        config.data, config.env_everything_linear_as_parallel, config.venv
+    )
+    obs = venv.reset()
+    expert_policy = ASPolicyVec(env=venv.env, **config.expert_params)
+    func = expert_policy.get_no_size_action_linear
+    obs_expert = func(obs[:, [2, 3, 4]])
+    np.testing.assert_allclose(obs[:, [0, 1]], obs_expert, atol=0.001)

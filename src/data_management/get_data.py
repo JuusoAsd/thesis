@@ -64,6 +64,13 @@ def get_data_by_dates(
         return None
 
 
+def get_data_by_date_list(date_list):
+    dfs = [get_data_by_dates(date) for date in date_list]
+    df = pd.concat(dfs)
+    df.sort_values(by="timestamp", inplace=True)
+    return df
+
+
 if __name__ == "__main__":
     print(get_data_by_dates("2021-12-21", days=1))
     print(get_data_by_dates("2021-12-21"))

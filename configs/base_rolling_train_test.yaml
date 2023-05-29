@@ -1,0 +1,57 @@
+retrain: True
+config_name: "26_05_2023_v1.1"
+
+initial_train:
+  eval_data:
+    start_date: '2021_12_21'
+    end_date: '2021_12_25'
+  train_data:
+    start_date: '2021_12_26'
+    end_date: '2022_01_31'
+  callback:
+    initial_expert: false
+    wait: 10
+    freq: 3
+    patience: 20
+    improvement_thresh: 0.01
+    time_envs: 6
+    inv_envs: 1
+    eval_mode: min_sharpe
+  timesteps: 10_000_000
+
+rolling_test_train:
+  timesteps: 1_000_000
+
+
+  retrain_interval: 5
+  skipped_days:
+    - "2022_01_12"
+    - "2022_01_13"
+    - "2022_01_14"
+    - "2022_01_15"
+    - "2022_01_16"
+    - "2022_01_17"
+    - "2022_01_18"
+    - "2022_01_19"
+    - "2022_01_20"
+    - "2022_01_21"
+  start_date: "2022_01_01"
+  end_date: "2022_02_03"
+  # start_date: '2021_12_21'
+  # end_date: '2021_12_25'
+
+  eval_data:
+    start_date: '2021_12_21'
+    end_date: '2021_12_28'
+
+  callback:
+    initial_expert: false
+    save_best_model: True
+    wait: 10
+    freq: 3
+    patience: 3
+    improvement_thresh: 0.01
+    time_envs: 6
+    inv_envs: 1
+    eval_mode: min_sharpe
+

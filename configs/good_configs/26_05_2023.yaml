@@ -1,0 +1,71 @@
+run_name: delta_inventory_pnlreward_1684931119
+eval_data:
+  start_date: '2021_12_28'
+  end_date: '2021_12_29'
+train_data:
+  start_date: '2021_12_30'
+  end_date: '2022_01_03'
+env:
+  spaces:
+    action_space: NormalizedAction
+    observation_space:
+      type: linear
+      params: EverythingLinearSpace
+  params:
+    inv_envs: 4
+    time_envs: 4
+    data_portion: 0.5
+    inv_jump: 0.18
+  reward_space: delta_inventory_pnl
+  reward_params:
+    inventory_threshold: 1.6
+    high_penalty: 25.0
+    steps: 10.0
+    inventory_multiplier: 1.0
+venv:
+  random: 1
+clone: false
+model:
+  algo: PPO
+  policy: MlpPolicy
+  model_params:
+    learning_rate: 7.047920836644666e-05
+    n_steps: 1024
+    batch_size: 2048
+    n_epochs: 20
+    gamma: 0.995
+    gae_lambda: 0.9
+    clip_range: 0.5
+    normalize_advantage: true
+    ent_coef: 1.0e-05
+    vf_coef: 0.2566598626828248
+    max_grad_norm: 1.0
+    sde_sample_freq: 8
+  policy_kwargs:
+    net_arch:
+      vf:
+      - 256
+      - 256
+      pi:
+      - 256
+      - 256
+expert_params:
+  max_order_size: 5
+  tick_size: 0.0001
+  max_ticks: 10
+  price_decimals: 4
+  inventory_target: 0
+  risk_aversion: 0.2
+  order_size: 1
+tuning:
+  timesteps: 10
+evaluation:
+  callback:
+    initial_expert: false
+    wait: 10
+    freq: 3
+    patience: 20
+    improvement_thresh: 0.01
+    time_envs: 6
+    inv_envs: 1
+    eval_mode: min_sharpe

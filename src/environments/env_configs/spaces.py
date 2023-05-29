@@ -1,4 +1,5 @@
 from enum import Enum
+from copy import deepcopy
 
 import numpy as np
 from gym import spaces
@@ -89,130 +90,47 @@ class ObservationSpace(Enum):
     )
 
 
-class LinearObservationSpaces(Enum):
-    # enum for different possible observation spaces
-    # keys must be found in the environment
-    OnlyInventorySpace = {
-        "inventory": {
-            "min": -1,
-            "max": 1,
-            "min_actual": -2,
-            "max_actual": 2,
-            "external": False,
-        },
+def create_space(min, max, min_actual, max_actual, external: bool):
+    """
+    creates a dictionary that determines linear normalization for a given variable
+    external means that variable is read from data and then normalized
+    not external is something that is calculated from other variables
+    """
+    return {
+        "min": min,
+        "max": max,
+        "min_actual": min_actual,
+        "max_actual": max_actual,
+        "external": external,
     }
+
+
+class LinearObservationSpaces(Enum):
+    OnlyInventorySpace = {"inventory": create_space(-1, 1, -2, 2, False)}
+
     SimpleLinearSpace = {
-        "inventory": {
-            "min": -1,
-            "max": 1,
-            "min_actual": -2,
-            "max_actual": 2,
-            "external": False,
-        },
-        "volatility": {
-            "min": -1,
-            "max": 1,
-            "min_actual": 0,
-            "max_actual": 0.01,
-            "external": True,
-        },
-        "intensity": {
-            "min": -1,
-            "max": 1,
-            "min_actual": 0,
-            "max_actual": 100_000,
-            "external": True,
-        },
+        "inventory": create_space(-1, 1, -2, 2, False),
+        "volatility": create_space(-1, 1, 0, 0.01, True),
+        "intensity": create_space(-1, 1, 0, 100_000, True),
     }
 
     OSILinearSpace = {
-        "inventory": {
-            "min": -1,
-            "max": 1,
-            "min_actual": -2,
-            "max_actual": 2,
-            "external": False,
-        },
-        "volatility": {
-            "min": -1,
-            "max": 1,
-            "min_actual": 0,
-            "max_actual": 0.01,
-            "external": True,
-        },
-        "intensity": {
-            "min": -1,
-            "max": 1,
-            "min_actual": 0,
-            "max_actual": 100_000,
-            "external": True,
-        },
-        "osi": {
-            "min": -1,
-            "max": 1,
-            "min_actual": -100,
-            "max_actual": 100,
-            "external": True,
-        },
+        **SimpleLinearSpace,
+        "osi": create_space(-1, 1, -100, 100, True),
     }
 
     EverythingLinearSpace = {
-        "inventory": {
-            "min": -1,
-            "max": 1,
-            "min_actual": -2,
-            "max_actual": 2,
-            "external": False,
-        },
-        "volatility": {
-            "min": -1,
-            "max": 1,
-            "min_actual": 0,
-            "max_actual": 0.01,
-            "external": True,
-        },
-        "intensity": {
-            "min": -1,
-            "max": 1,
-            "min_actual": 0,
-            "max_actual": 100_000,
-            "external": True,
-        },
-        "osi": {
-            "min": -1,
-            "max": 1,
-            "min_actual": -100,
-            "max_actual": 100,
-            "external": True,
-        },
-        "order_book_imbalance": {
-            "min": -1,
-            "max": 1,
-            "min_actual": -1,
-            "max_actual": 1,
-            "external": True,
-        },
-        "current_second": {
-            "min": -1,
-            "max": 1,
-            "min_actual": 0,
-            "max_actual": 60,
-            "external": True,
-        },
-        "current_minute": {
-            "min": -1,
-            "max": 1,
-            "min_actual": 0,
-            "max_actual": 60,
-            "external": True,
-        },
-        "current_hour": {
-            "min": -1,
-            "max": 1,
-            "min_actual": 0,
-            "max_actual": 24,
-            "external": True,
-        },
+        **OSILinearSpace,
+        "order_book_imbalance": create_space(-1, 1, -1, 1, True),
+        "current_second": create_space(-1, 1, 0, 60, True),
+        "current_minute": create_space(-1, 1, 0, 60, True),
+        "current_hour": create_space(-1, 1, 0, 24, True),
+    }
+
+    EverythingLinearSpaceAS = {
+        "as_bid": create_space(-1, 1, -1, 1, False),
+        "as_ask": create_space(-1, 1, -1, 1, False),
+        **EverythingLinearSpace,
     }
 
 
@@ -223,8 +141,12 @@ class LinearObservation:
     """
 
     def __init__(self, obs_info_dict, n_env=1):
-        if type(obs_info_dict) == LinearObservationSpaces:
+        if isinstance(obs_info_dict, LinearObservationSpaces):
+            self.space_type = obs_info_dict
             obs_info_dict = obs_info_dict.value
+        else:
+            self.space_type = None
+        self.obs_info_dict = deepcopy(obs_info_dict)
         lows = []
         highs = []
 
@@ -286,71 +208,57 @@ class LinearObservation:
     def get_correct_order(self):
         return list(self.func_dict.keys())
 
+    # def get_grid_space(self, n, constant_values={}):
+    #     """
+    #     returns a grid of observations from min to max for each variable while holding all others constant
 
-# class LinearObservationOld:
-#     def __init__(
-#         self,
-#         obs_info_dict={
-#             "volatility": {"min": -1, "max": 1, "min_actual": 0, "max_actual": 50},
-#         },
-#         n_env=1,
-#     ):
-#         if type(obs_info_dict) == LinearObservationSpaces:
-#             obs_info_dict = obs_info_dict.value
-#         lows = []
-#         highs = []
+    #     n: number of points to sample for each variable
+    #     constant: list of what each variable should be set while constant (defaults to middle of the range)
+    #     """
 
-#         self.func_dict = {}
-#         for k, v in obs_info_dict.items():
-#             for i in ["min", "max", "min_actual", "max_actual"]:
-#                 if i not in v:
-#                     raise ValueError(f"Missing {i} in obs_info_dict for {k}")
-#             lows.append(v["min"])
-#             highs.append(v["max"])
-#             slope = (v["max_actual"] - v["min_actual"]) / (v["max"] - v["min"])
-#             intercept = v["min_actual"] - slope * v["min"]
+    #     obs_values = []
+    #     for k, v in self.obs_info_dict.items():
+    #         min_val = v["min"]
+    #         max_val = v["max"]
+    #         distance = max_val - min_val
+    #         step = distance / (n)
+    #         values = [i for i in np.arange(min_val, max_val + 1e-6, step)]
+    #         obs_values.append(values)
+    #     grids = np.meshgrid(*obs_values, indexing="ij")
+    #     grid_space = np.stack(grids, axis=-1).reshape(-1, len(self.obs_info_dict))
 
-#             self.func_dict[k] = {
-#                 "intercept": intercept,
-#                 "slope": slope,
-#                 "min": v["min"],
-#                 "max": v["max"],
-#                 "min_actual": np.full(n_env, v["min_actual"]),
-#                 "max_actual": np.full(n_env, v["max_actual"]),
-#             }
+    #     return grid_space
 
-#         self.obs_space = spaces.Box(
-#             low=np.float32(np.array(lows)),
-#             high=np.float32(np.array(highs)),
-#             dtype=np.float32,
-#         )
+    def get_grid_space(self, n, constant_values={}):
+        """
+        Returns a grid of observations from min to max for each variable while holding all others constant
 
-#     def convert_to_readable(self, obs_dict={"volatility": 50}):
-#         # convert from normalized to actual
-#         actual_obs = {}
-#         for k, v in obs_dict.items():
-#             calculated_value = (
-#                 self.func_dict[k]["slope"] * v + self.func_dict[k]["intercept"]
-#             )
+        n: number of points to sample for each variable
+        constant_values: dict where key is the variable name to be held constant, and value is the constant value
+        """
 
-#             actual_obs[k] = np.minimum(
-#                 np.maximum(calculated_value, self.func_dict[k]["min_actual"]),
-#                 self.func_dict[k]["max_actual"],
-#             )
-#         return actual_obs
+        obs_values = []
+        variable_order = {}  # To track the order of variables
 
-#     def convert_to_normalized(self, obs_dict={"volatility": 0.2}):
-#         # convert from actual to normalized
-#         normalized_obs = {}
-#         for obs_type, value in obs_dict.items():
-#             calculated_value = (
-#                 value - self.func_dict[obs_type]["intercept"]
-#             ) / self.func_dict[obs_type]["slope"]
-#             normalized_obs[obs_type] = np.minimum(
-#                 np.maximum(calculated_value, self.func_dict[obs_type]["min"]),
-#                 self.func_dict[obs_type]["max"],
-#             )
-#         obs_list = []
-#         for k, v in normalized_obs.items():
-#             obs_list.append(v)
-#         return np.concatenate(obs_list).T
+        # Create list of obs_values for non-constant variables
+        steps = 0
+        for k, v in self.obs_info_dict.items():
+            variable_order[k] = steps
+            if k not in constant_values:
+                min_val = v["min"]
+                max_val = v["max"]
+                distance = max_val - min_val
+                step = distance / (n)
+                values = [i for i in np.arange(min_val, max_val + 1e-6, step)]
+                obs_values.append(values)
+                steps += 1
+
+        grids = np.meshgrid(*obs_values, indexing="ij")
+        grid_space = np.stack(grids, axis=-1).reshape(
+            -1, len(self.obs_info_dict) - len(constant_values)
+        )
+        # Insert columns for constant variables
+        for var, const_val in constant_values.items():
+            grid_space = np.insert(grid_space, variable_order[var], const_val, axis=1)
+
+        return np.round(grid_space, 5)

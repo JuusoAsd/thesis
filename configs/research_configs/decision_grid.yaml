@@ -1,0 +1,44 @@
+data:
+  start_date: "2021_12_24"
+  end_date: "2021_12_26"
+
+decision_grid:
+  env: 
+      spaces:
+        action_space: NormalizedAction
+        observation_space: 
+          type: "linear"
+          params: EverythingLinearSpace
+      reward_space: pnl 
+      params:
+        inv_envs: 1
+        time_envs: 1
+  model_name: delta_inventory
+  distinct_count_per_variable: 10
+  constant_values:
+    # volatility: 0.15
+    intensity: 0.15
+    osi: 0.15
+    order_book_imbalance: 0
+    current_second: 0
+    current_minute: 0
+    current_hour: 0
+
+  model_kwargs:
+    learning_rate: 7.047920836644666e-05
+    n_steps: 1024
+    batch_size: 2048
+    n_epochs: 20
+    gamma: 0.995
+    gae_lambda: 0.9
+    clip_range: 0.5
+    normalize_advantage: true
+    ent_coef: 1.0e-05
+    vf_coef: 0.2566598626828248
+    max_grad_norm: 1.0
+    sde_sample_freq: 8
+
+venv:
+  random: 1
+
+

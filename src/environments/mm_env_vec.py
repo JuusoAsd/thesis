@@ -11,8 +11,10 @@ from src.environments.env_configs.spaces import (
     ActionSpace,
     ObservationSpace,
     LinearObservation,
+    LinearObservationSpaces,
 )
 from stable_baselines3.common.vec_env import VecEnv
+from src.environments.env_configs.policies import ASPolicyVec
 
 
 class MMVecEnv(gym.Env):
@@ -39,6 +41,7 @@ class MMVecEnv(gym.Env):
         inv_jump=0.25,
         # other params
         column_mapping={},  # which columns are what
+        as_expert_params={},
         use_copy_envs=False,
         reset_metrics_on_reset=True,
         **kwargs,
@@ -153,6 +156,10 @@ class MMVecEnv(gym.Env):
         self.trade_market = np.zeros(self.n_envs)
         self.trade_limit = np.zeros(self.n_envs)
         self.spread = np.zeros(self.n_envs)
+        if as_expert_params != {}:
+            self.as_expert_params = as_expert_params
+            expert_policy = ASPolicyVec(n_envs=self.n_envs, **as_expert_params)
+            self.action_func = expert_policy.get_action_no_mid_no_size
 
         self.reset()
         return None
@@ -325,18 +332,40 @@ class MMVecEnv(gym.Env):
             5,
         ).reshape(-1, 1)
         if isinstance(self.obs_space, LinearObservation):
+            # val contains the external observations (from file) as determined in the observation space
             val = self.external_obs[self.current_step]
-            all_vals = np.concatenate((self.norm_inventory, val), axis=1)
-            norm = self.obs_space.convert_to_normalized(all_vals)
-            return norm
-        # if isinstance(self.obs_space, LinearObservation):
-        #     obs_dict = {"inventory": self.norm_inventory}
-        #     for k in self.obs_space.func_dict.keys():
-        #         if k != "inventory":
-        #             val = getattr(self, k)[self.current_step].reshape(-1, 1).T
-        #             obs_dict[k] = val
 
-        #     return self.obs_space.convert_to_normalized(obs_dict)
+            if (
+                self.obs_space.space_type
+                == LinearObservationSpaces.EverythingLinearSpace
+            ):
+                all_vals = np.concatenate((self.norm_inventory, val), axis=1)
+                norm = self.obs_space.convert_to_normalized(all_vals)
+            elif (
+                self.obs_space.space_type
+                == LinearObservationSpaces.EverythingLinearSpaceAS
+            ):
+                # find what AS model would do here, pass inventory, vol and intensity as observations
+                vol = self.data[:, self.column_mapping["volatility"]][
+                    self.current_step
+                ].reshape(-1, 1)
+                intensity = self.data[:, self.column_mapping["intensity"]][
+                    self.current_step
+                ].reshape(-1, 1)
+
+                as_obs = np.concatenate([self.norm_inventory, vol, intensity], axis=1)
+                as_action = self.action_func(as_obs)
+                as_bid = as_action[:, 0].reshape(-1, 1)
+                as_ask = as_action[:, 1].reshape(-1, 1)
+                all_vals = np.concatenate(
+                    (as_bid, as_ask, self.norm_inventory, val), axis=1
+                )
+                norm = self.obs_space.convert_to_normalized(all_vals)
+            else:
+                all_vals = np.concatenate((self.norm_inventory, val), axis=1)
+                norm = self.obs_space.convert_to_normalized(all_vals)
+
+            return norm
         else:
             raise NotImplementedError(
                 f"Observation space {type(self.obs_space)} not implemented, looking for {LinearObservation}"

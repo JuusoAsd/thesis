@@ -66,6 +66,7 @@ class ExternalMeasureCallback(BaseCallback):
         else:
             self.best_reward = None
         self.best_performance_metrics = {}
+        self.has_saved = False
 
     def get_expert_performance(self):
         expert_policy = ASPolicyVec
@@ -128,7 +129,7 @@ class ExternalMeasureCallback(BaseCallback):
         # only evaluate after "wait" freq periods have passed
         if self.eval_count > self.wait:
             if self.eval_count % self.freq == 0:
-                # measure agent performance
+                logging.info(f"evals: {self.eval_count}, patience: {self.patience}")
                 self.venv.env.reset_metrics()
                 obs = self.venv.reset()
                 while True:
@@ -147,7 +148,13 @@ class ExternalMeasureCallback(BaseCallback):
                     self.best_performance_metrics = {
                         k: np.mean(v) for k, v in performance_metrics.items()
                     }
-                elif agent_reward > self.best_reward * (1 + self.improvement_thresh):
+                    if self.save_model:
+                        save_trained_model(self.locals["self"], self.model_name)
+
+                elif (agent_reward - self.best_reward) / abs(
+                    self.best_reward
+                ) > self.improvement_thresh:
+                    logging.info(f"new best reward: {agent_reward}")
                     self.patience = self.init_patience
                     self.best_reward = agent_reward
                     self.best_performance_metrics = {
@@ -155,18 +162,12 @@ class ExternalMeasureCallback(BaseCallback):
                     }
                     if self.save_model:
                         save_trained_model(self.locals["self"], self.model_name)
+                        self.has_saved = True
                 else:
                     self.patience -= 1
                     if self.patience <= 0:
                         self.continue_training = False
                         print(f"stopping training after {self.eval_count} evals")
-                # mean_performance_metrics = {
-                #     k: np.mean(v) for k, v in performance_metrics.items()
-                # }
-                # logging.debug(
-                #     f"Evals: {self.eval_count}, patience: {self.patience} agent reward: {agent_reward}, best reward: {self.best_reward}, {mean_performance_metrics}"
-                # )
-
         return True
 
     def _on_training_end(self) -> None:
@@ -279,6 +280,8 @@ class CustomRepeater(Repeater):
                 metric = np.nanmin(scores)
             elif self.aggregation == "mean/var":
                 metric = np.nanmean(scores) / (1 + np.nanvar(scores))
+            elif self.aggregation == "mean-var":
+                metric = np.nanmean(scores) - np.nanvar(scores)
             else:
                 raise NotImplementedError
             self.searcher.on_trial_complete(
