@@ -25,19 +25,19 @@ decision_grid:
           inventory_target: 0
           risk_aversion: 0.2
           order_size: 1
-  model_name: delta_inventory
+  model_name: delta_inventory_pnlreward_1684931119_init
   distinct_count_per_variable: 50
   constant_values:
     # as_bid: 0
     # as_ask: 0
-    # inventory: 0
-    # volatility: 0.25
-    intensity: 0.15
-    osi: 0.15
-    order_book_imbalance: 0
-    current_second: 0
-    current_minute: 0
-    current_hour: 0
+    inventory: 0
+    intensity: 0.594 # Average
+    volatility: -0.73 # Average
+    osi: 0.286 # Average
+    order_book_imbalance: -0.022 # Average
+    # current_second: -0.017 # Average
+    # current_minute: -0.017 # Average
+    current_hour: -0.0447 # Average
 
   model_kwargs:
     learning_rate: 7.047920836644666e-05

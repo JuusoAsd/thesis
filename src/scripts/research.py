@@ -38,10 +38,8 @@ from src.environments.env_configs.policies import ASPolicyVec
 
 load_dotenv()
 
-config = get_config("decision_grid", subdirectory=["research_configs"])
 
-
-def create_model_decision_grid():
+def create_model_decision_grid(config):
     """
     Save a grid of observations and respective actions to understand model behavior
     """

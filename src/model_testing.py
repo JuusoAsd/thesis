@@ -2,6 +2,7 @@ import os
 import logging
 import copy
 import csv
+import pandas as pd
 
 import numpy as np
 from dotenv import load_dotenv
@@ -11,7 +12,7 @@ from src.environments.env_configs.spaces import ActionSpace
 from src.environments.env_configs.policies import ASPolicyVec
 from src.environments.env_configs.rewards import *
 from src.data_management import get_data_by_dates
-
+from src.environments.env_configs.spaces import get_action_space_keys
 
 load_dotenv()
 
@@ -62,15 +63,41 @@ def test_cloning_vs_manual():
     print(f"Expert: {expert_venv.env.get_metrics()}")
 
 
-def test_trained_model(venv, model):
-    logging.info("Testing trained model")
-    obs = venv.reset()
-    done = False
+def test_trained_model(venv, model, recorded_metrics="summary"):
     n_steps = 0
+
+    action_list = []
+    obs_list = []
+    done = False
+    obs = venv.reset()
     while not done:
         action = model.predict(obs, deterministic=True)[0]
+        if recorded_metrics == "full":
+            obs_list.append(obs[0].tolist())
+            action_list.append(action[0].tolist())
         obs, _, done, _ = venv.step(action)
-    print(f"Metrics: {venv.env.get_metrics()}")
+        n_steps += 1
+    if recorded_metrics == "summary":
+        if venv.env.n_envs == 1:
+            return venv.env.get_metrics_single()
+        else:
+            return venv.env.get_metrics()
+    elif recorded_metrics == "full":
+        action_df = pd.DataFrame(
+            action_list, columns=get_action_space_keys(venv.env.act_space)
+        )
+        obs_df = pd.DataFrame(
+            obs_list, columns=list(venv.env.obs_space.obs_info_dict.keys())
+        )
+        df = venv.env.get_recorded_values_to_df()
+        df["mid_price"] = venv.env.mid_price
+        df["best_bid"] = venv.env.best_bid
+        df["best_ask"] = venv.env.best_ask
+        df["low_price"] = venv.env.low_price
+        df["high_price"] = venv.env.high_price
+        df["timestamp"] = venv.env.timestamp
+        df = pd.concat([df, action_df, obs_df], axis=1)
+        return df
 
 
 def trained_vs_manual(venv, model, save_values=False, result_file="", date=""):

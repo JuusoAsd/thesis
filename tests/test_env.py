@@ -58,6 +58,7 @@ test_data = {
 }
 df = pd.DataFrame(test_data)
 df["mid_price"] = (df["best_bid"] + df["best_ask"]) / 2
+df["timestamp"] = 1
 
 
 def test_limit_order(caplog):
@@ -81,6 +82,16 @@ def test_limit_order(caplog):
     # check if inventory is correct
     assert venv.env.inventory_qty == 0, "limit order inventory"
     assert_allclose(venv.env.spread, [0.06])
+    assert venv.env.trading_bid[0] == True
+    assert venv.env.trading_bid_type[0] == True
+    assert venv.env.trading_bid_hit[0] == True
+    assert_allclose(venv.env.trading_bid_limit_value[0][0], 0.03)
+    assert venv.env.trading_bid_market_value[0] == 0
+
+    assert venv.env.trading_ask[0] == True
+    assert venv.env.trading_ask_type[0] == True
+    assert venv.env.trading_ask_hit[0] == True
+    assert_allclose(venv.env.trading_ask_limit_value[0][0], 0.03)
 
 
 def test_market_order(caplog):
@@ -94,8 +105,11 @@ def test_market_order(caplog):
     )
     venv.reset()
     venv.env.reset_metrics()
+    venv.env.record_values = True
     venv.env.reset_metrics_on_reset = False
 
+    # bid size 1, ask size 1, bid above mid, ask below mid
+    # - > should buy and sell at market price
     action = np.array([1, 1, 1, -1])
 
     obs, reward, done, info = venv.step(action)
@@ -109,6 +123,17 @@ def test_market_order(caplog):
     # check if inventory is correct
     assert venv.env.inventory_qty == 0, "market order inventory"
     assert_allclose(venv.env.spread, [-60])
+    assert venv.env.trading_bid[0] == True
+    assert venv.env.trading_bid_type[0] == False
+    assert venv.env.trading_bid_hit[0] == False
+    assert venv.env.trading_bid_limit_value[0] == 0
+    assert venv.env.trading_bid_market_value[0] == -10
+
+    assert venv.env.trading_ask[0] == True
+    assert venv.env.trading_ask_type[0] == False
+    assert venv.env.trading_ask_hit[0] == False
+    assert venv.env.trading_ask_limit_value[0] == 0
+    assert venv.env.trading_ask_market_value[0] == -10
 
 
 def test_zero_qty():

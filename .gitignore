@@ -354,3 +354,4 @@ cython_debug/
 raw_data/
 models/
 *.env
+visuals/*

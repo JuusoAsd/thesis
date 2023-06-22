@@ -9,7 +9,9 @@ use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use super::file_util::{get_file_date, ASRecord, AggregateRecord, FileHandler, InterimRecord};
+use super::file_util::{
+    from_str_custom_bool, get_file_date, ASRecord, AggregateRecord, FileHandler, InterimRecord,
+};
 use super::orderbook_util::{Orderbook, OrderbookLevel, OrderbookLevelPartial};
 
 #[derive(Debug, Deserialize)]
@@ -49,7 +51,10 @@ pub struct TradeRecord {
     qty: Decimal,
     total_value: Decimal,
     timestamp: i64,
-    is_buyer_maker: bool,
+    // #[serde(deserialize_with = "from_str_custom_bool")]
+    // is_buyer_maker: Option<bool>,
+    // #[serde(deserialize_with = "from_str_custom_bool")]
+    // random: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Serialize, Copy, Clone, Eq, Hash)]
@@ -720,6 +725,8 @@ fn progress_iterators(
 //         }
 //     }
 // }
+
+use num_format::{Locale, ToFormattedString};
 pub fn parse_both_records(
     start_timestamp: i64,
     end_timestamp: i64,
@@ -755,7 +762,7 @@ pub fn parse_both_records(
         if count % 1_000_000 == 0 {
             println!(
                 "Processed {} updates in {} seconds",
-                count,
+                count.to_formatted_string(&Locale::en),
                 start_time.elapsed().unwrap().as_secs()
             );
         }

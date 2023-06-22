@@ -1,12 +1,32 @@
 use super::parse_util::Side;
 use csv::{Reader, ReaderBuilder, StringRecord, StringRecordsIntoIter};
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal, Error};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::fs::{self, ReadDir};
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::vec::IntoIter;
 use walkdir::WalkDir;
+
+pub fn from_str_custom_bool<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+
+    match s {
+        Some(st) => match st.to_lowercase().as_str() {
+            "true" => Ok(Some(true)),
+            "false" => Ok(Some(false)),
+            _ => Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str(&st),
+                &"a boolean",
+            )),
+        },
+        None => Ok(None),
+    }
+}
 
 pub struct FileHandler {
     path_iter: IntoIter<PathBuf>,
@@ -66,12 +86,13 @@ impl Iterator for FileHandler {
                         .unwrap()
                 };
                 self.file_iter = file_reader.into_records();
+                // skip the first
+                self.next();
                 self.next()
             }
         }
     }
 }
-
 #[derive(Debug, Serialize)]
 pub struct ASRecord {
     timestamp: i64,
@@ -196,6 +217,13 @@ pub fn get_csv_files_sorted(target_path: &PathBuf) -> Vec<PathBuf> {
     for entry in WalkDir::new(target_path) {
         let entry = entry.unwrap();
         let path = entry.path();
+        if path
+            .file_name()
+            .map(|name| name.to_string_lossy().starts_with('.'))
+            .unwrap_or(false)
+        {
+            continue;
+        }
         if path.is_file() {
             match path.extension() {
                 Some(ext) => {

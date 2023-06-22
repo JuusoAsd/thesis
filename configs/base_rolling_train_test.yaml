@@ -1,29 +1,35 @@
-retrain: True
-config_name: "26_05_2023_v1.1"
+retrain: False # ---------- ADJUST ----------
+recorded_metrics: "summary" # Full for step level, summary for interval level
+config_name: "26_05_2023"
+name_id: "run_trades"
 
 initial_train:
   eval_data:
-    start_date: '2021_12_21'
-    end_date: '2021_12_25'
+    start_date: '2022_01_05'
+    end_date: '2022_01_10'
   train_data:
-    start_date: '2021_12_26'
-    end_date: '2022_01_31'
+    start_date: '2021_12_21'
+    end_date: '2022_01_04'
   callback:
     initial_expert: false
     wait: 10
-    freq: 3
-    patience: 20
+    freq: 20
+    patience: 6
     improvement_thresh: 0.01
     time_envs: 6
     inv_envs: 1
     eval_mode: min_sharpe
   timesteps: 10_000_000
 
+
+env:
+  params:
+    use_copy_envs: True
+
+
 rolling_test_train:
-  timesteps: 1_000_000
-
-
-  retrain_interval: 5
+  timesteps: 0 # 0 for no retraining, other for training
+  retrain_interval: 1 # 0 for full data at once
   skipped_days:
     - "2022_01_12"
     - "2022_01_13"
@@ -35,10 +41,15 @@ rolling_test_train:
     - "2022_01_19"
     - "2022_01_20"
     - "2022_01_21"
-  start_date: "2022_01_01"
-  end_date: "2022_02_03"
-  # start_date: '2021_12_21'
-  # end_date: '2021_12_25'
+    - "2022_03_02"
+    - "2022_03_10"
+    - "2022_03_11"
+    - "2022_03_29"
+
+  start_date: "2022_01_22"
+  end_date: "2022_04_05"
+  # end_date: "2022_01_23"
+
 
   eval_data:
     start_date: '2021_12_21'
@@ -48,10 +59,24 @@ rolling_test_train:
     initial_expert: false
     save_best_model: True
     wait: 10
-    freq: 3
+    freq: 20
     patience: 3
     improvement_thresh: 0.01
     time_envs: 6
     inv_envs: 1
     eval_mode: min_sharpe
 
+expert_params:
+  max_order_size: 5
+  tick_size: 0.0001
+  max_ticks: 10
+  price_decimals: 4
+  inventory_target: 0
+  risk_aversion: 0.2
+  order_size: 1
+
+as_comparison:
+  include_model: False # ---------- ADJUST ----------
+  save_full: False # ---------- ADJUST ----------
+  actions: ["bid_size", "ask_size", "bid", "ask"]
+  observations: ["norm_inv", "volatility", "intensity", "osi", "order_book_imbalance", "current_second", "current_minute", "current_hour"]

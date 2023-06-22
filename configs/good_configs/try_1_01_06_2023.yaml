@@ -1,0 +1,81 @@
+run_name: simple_inventory_pnl_reward_1685386588
+eval_data:
+  start_date: '2022_01_22'
+  end_date: '2022_01_30'
+train_data:
+  start_date: '2021_12_21'
+  end_date: '2022_01_10'
+env:
+  spaces:
+    action_space: NoSizeAction
+    observation_space:
+      type: linear
+      params: EverythingLinearSpaceAS
+  params:
+    inv_envs: 4
+    time_envs: 4
+    data_portion: 0.5
+    inv_jump: 0.18
+    as_expert_params:
+      max_order_size: 5.0
+      tick_size: 0.0001
+      max_ticks: 10.0
+      price_decimals: 4.0
+      inventory_target: 0.0
+      risk_aversion: 0.2
+      order_size: 1.0
+  reward_space: simple_inventory_pnl
+  reward_params:
+    inventory_threshold: 0.5
+    high_penalty: 25.0
+venv:
+  random: 1
+clone: true
+model:
+  model_name: PLACEHOLDER
+  algo: PPO
+  policy: MlpPolicy
+  model_params:
+    learning_rate: 0.0009262813638062
+    n_steps: 256
+    batch_size: 512
+    n_epochs: 10
+    gamma: 0.9995
+    gae_lambda: 0.92
+    clip_range: 0.5
+    clip_range_vf: 0.5
+    normalize_advantage: true
+    ent_coef: 0.01
+    vf_coef: 0.786154079020197
+    max_grad_norm: 5.0
+    sde_sample_freq: 128
+  policy_kwargs:
+    net_arch:
+      pi:
+      - 64
+      - 64
+      vf:
+      - 64
+      - 64
+expert_params:
+  max_order_size: 5
+  tick_size: 0.0001
+  max_ticks: 10
+  price_decimals: 4
+  inventory_target: 0
+  risk_aversion: 0.2
+  order_size: 1
+tuning:
+  timesteps: 10000000
+evaluation:
+  callback:
+    initial_expert: false
+    save_best_model: false
+    wait: 10
+    freq: 20
+    patience: 6
+    improvement_thresh: 0.01
+    time_envs: 6
+    inv_envs: 1
+    eval_mode: min_sharpe
+run_date: '2023_05_29'

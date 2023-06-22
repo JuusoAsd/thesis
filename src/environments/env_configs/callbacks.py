@@ -129,7 +129,6 @@ class ExternalMeasureCallback(BaseCallback):
         # only evaluate after "wait" freq periods have passed
         if self.eval_count > self.wait:
             if self.eval_count % self.freq == 0:
-                logging.info(f"evals: {self.eval_count}, patience: {self.patience}")
                 self.venv.env.reset_metrics()
                 obs = self.venv.reset()
                 while True:
@@ -168,6 +167,9 @@ class ExternalMeasureCallback(BaseCallback):
                     if self.patience <= 0:
                         self.continue_training = False
                         print(f"stopping training after {self.eval_count} evals")
+                logging.info(
+                    f"evals: {self.eval_count}, patience: {self.patience}, best: {np.round(self.best_reward,2)}, current: {np.round(agent_reward,2)}"
+                )
         return True
 
     def _on_training_end(self) -> None:

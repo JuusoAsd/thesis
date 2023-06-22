@@ -138,7 +138,7 @@ def parse_indicators_v1():
     target_path = os.getenv("INDICATOR_PATH")
 
     # set update interval to 0 for most calculations, intensity is 99.5% of time so update it to every 30 minutes
-    redo = True
+    redo = False
 
     n = 0
     last_update = 0
@@ -149,6 +149,22 @@ def parse_indicators_v1():
 
     indicators = IndicatorReader(interim_path)
     base = BaseReader(base_path)
+
+    headers = [
+        "timestamp",
+        "best_bid",
+        "best_ask",
+        "mid_price",
+        "low_price",
+        "high_price",
+        "order_book_imbalance",
+        "current_second",
+        "current_minute",
+        "current_hour",
+        "intensity",
+        "volatility",
+        "osi",
+    ]
 
     if redo:
         # start by rewinding indicators by "start_updates"
@@ -173,6 +189,7 @@ def parse_indicators_v1():
 
                 # initialize data file for new date
                 if write_path == None or current_date != path_date:
+                    print(f"Writing data for {current_date}")
                     # close previous file
                     if write_path != None:
                         f.close()
@@ -185,23 +202,7 @@ def parse_indicators_v1():
                     write_path = os.path.join(folder_path, "data.csv")
                     f = open(write_path, "w+")
                     writer = csv.writer(f)
-                    writer.writerow(
-                        [
-                            "timestamp",
-                            "best_bid",
-                            "best_ask",
-                            "mid_price",
-                            "low_price",
-                            "high_price",
-                            "order_book_imbalance",
-                            "current_second",
-                            "current_minute",
-                            "current_hour",
-                            "intensity",
-                            "volatility",
-                            "osi",
-                        ]
-                    )
+                    writer.writerow(headers)
                 writer.writerow(base.get_last() + indicators.get_last())
                 n += 1
                 if n % 10000 == 0:
@@ -280,19 +281,7 @@ def parse_indicators_v1():
                             write_path = os.path.join(folder_path, "data.csv")
                             f = open(write_path, "w+")
                             writer = csv.writer(f)
-                            writer.writerow(
-                                [
-                                    "timestamp",
-                                    "best_bid",
-                                    "best_ask",
-                                    "mid_price",
-                                    "low_price",
-                                    "high_price",
-                                    "intensity",
-                                    "volatility",
-                                    "osi",
-                                ]
-                            )
+                            writer.writerow(headers)
                         writer.writerow(base.get_last() + indicators.get_last())
                         n += 1
                         if n % 10000 == 0:

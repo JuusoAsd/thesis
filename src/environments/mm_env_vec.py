@@ -15,6 +15,7 @@ from src.environments.env_configs.spaces import (
 )
 from stable_baselines3.common.vec_env import VecEnv
 from src.environments.env_configs.policies import ASPolicyVec
+from collections.abc import Sequence
 
 
 class MMVecEnv(gym.Env):
@@ -65,7 +66,8 @@ class MMVecEnv(gym.Env):
             - inv_jump: how much the inventory jumps between envs
 
         """
-        if not use_copy_envs:
+        self.use_copy_envs = use_copy_envs
+        if not self.use_copy_envs:
             # if inv_envs % 2 == 0:
             #     logging.warning(f"Using {inv_envs} inv_envs, prefer using odd number")
             if (inv_envs - 1) * inv_jump >= 1:
@@ -128,6 +130,7 @@ class MMVecEnv(gym.Env):
         # NOTE: NEW
         # instead of setting attributes individually, have a single external_obs attribute
         self.reset_metrics_on_reset = reset_metrics_on_reset
+        self.timestamp = self.data[:, self.column_mapping["timestamp"]]
         self.mid_price = self.data[:, self.column_mapping["mid_price"]]
         self.best_bid = self.data[:, self.column_mapping["best_bid"]]
         self.best_ask = self.data[:, self.column_mapping["best_ask"]]
@@ -161,11 +164,32 @@ class MMVecEnv(gym.Env):
         self.values = []
         self.inventory_values = []
         self.inventory_qty_values = []
+        self.limit_buy = []
+        self.limit_sell = []
+        self.market_buy = []
+        self.market_sell = []
+
+        self.trading_bid = []
+        self.trading_bid_type = []
+        self.trading_bid_hit = []
+        self.trading_bid_limit_value = []
+        self.trading_bid_market_value = []
+        self.trading_bid_limit_volume = []
+        self.trading_bid_market_volume = []
+
+        self.trading_ask = []
+        self.trading_ask_type = []
+        self.trading_ask_hit = []
+        self.trading_ask_limit_value = []
+        self.trading_ask_market_value = []
+        self.trading_ask_limit_volume = []
+        self.trading_ask_market_volume = []
+
         self.trade_market = np.zeros(self.n_envs)
         self.trade_limit = np.zeros(self.n_envs)
         self.spread = np.zeros(self.n_envs)
-        if as_expert_params != {}:
-            self.as_expert_params = as_expert_params
+        self.as_expert_params = as_expert_params
+        if self.as_expert_params != {}:
             expert_policy = ASPolicyVec(n_envs=self.n_envs, **as_expert_params)
             self.action_func = expert_policy.get_action_no_mid_no_size
 
@@ -187,6 +211,7 @@ class MMVecEnv(gym.Env):
             "action_space": self.act_space,
             "observation_space": self.obs_space,
             "as_expert_params": self.as_expert_params,
+            "use_copy_envs": self.use_copy_envs,
         }
 
     def reset(self):
@@ -268,71 +293,64 @@ class MMVecEnv(gym.Env):
         # buying happens above mid price, selling below mid price
 
         execute_buy = self.bids >= self.best_ask[self.current_step]
-        buy_spread = (
-            (self.bids - self.mid_price[self.current_step])
-            * self.bid_sizes
-            * execute_buy
-        )
-
-        self.inventory_qty += self.bid_sizes * execute_buy
-        self.quote -= self.best_ask[self.current_step] * self.bid_sizes * execute_buy
-        # logging.debug(
-        #     f"market buy: {execute_buy}, qty: {self.bid_sizes},  price: {self.best_ask[self.current_step]}"
-        # )
+        execute_buy_size = execute_buy * self.bid_sizes
+        buy_spread = (self.bids - self.mid_price[self.current_step]) * execute_buy_size
+        self.inventory_qty += execute_buy_size
+        self.quote -= self.best_ask[self.current_step] * execute_buy_size
+        # remove order if executed
         self.bids = self.bids * (1 - execute_buy)
         self.bid_sizes = self.bid_sizes * (1 - execute_buy)
+        if self.record_values:
+            self.market_buy.append(execute_buy)
 
+        # sell
         execute_sell = self.asks <= self.best_bid[self.current_step]
+        execute_sell_size = execute_sell * self.ask_sizes
         sell_spread = (
-            (self.mid_price[self.current_step] - self.asks)
-            * self.ask_sizes
-            * execute_sell
-        )
-        self.inventory_qty -= self.ask_sizes * execute_sell
-        self.quote += self.best_bid[self.current_step] * self.ask_sizes * execute_sell
-        # logging.debug(
-        #     f"market sell: {execute_sell}, qty: {self.ask_sizes},  price: {self.best_bid[self.current_step]}"
-        # )
-
-        self.asks = self.asks * (1 - execute_sell)
+            self.mid_price[self.current_step] - self.asks
+        ) * execute_sell_size
+        self.inventory_qty -= execute_sell_size
+        self.quote += self.best_bid[self.current_step] * execute_sell_size
+        # remove order if executed, means setting ask price to very high number
+        self.asks = self.asks * (1 - execute_sell) + execute_sell * 1_000_000
         self.ask_sizes = self.ask_sizes * (1 - execute_sell)
-        self.trade_market += execute_buy + execute_sell
+        if self.record_values:
+            self.market_sell.append(execute_sell)
+
+        self.trade_market += np.where(execute_buy_size != 0, 1, 0) + np.where(
+            execute_sell_size != 0, 1, 0
+        )
         self.spread -= sell_spread + buy_spread
 
     def _execute_limit_orders(self):
         execute_buy = self.bids >= self.low_price[self.current_step]
-        buy_spread = (
-            (self.mid_price[self.current_step] - self.bids)
-            * execute_buy
-            * self.bid_sizes
-        )
-        self.inventory_qty += self.bid_sizes * execute_buy
-        self.quote -= self.bids * self.bid_sizes * execute_buy
-        # logging.debug(
-        #     f"limit buy: {execute_buy}, qty: {self.bid_sizes}, price: {self.bids * self.bid_sizes}"
-        # )
+        execute_buy_size = execute_buy * self.bid_sizes
+        buy_spread = (self.mid_price[self.current_step] - self.bids) * execute_buy_size
+        self.inventory_qty += execute_buy_size
+        self.quote -= self.bids * execute_buy_size
         self.bids = self.bids * (1 - execute_buy)
         self.bid_sizes = self.bid_sizes * (1 - execute_buy)
 
         execute_sell = self.asks <= self.high_price[self.current_step]
+        execute_sell_size = execute_sell * self.ask_sizes
         sell_spread = (
-            (self.asks - self.mid_price[self.current_step])
-            * execute_sell
-            * self.ask_sizes
-        )
-        self.inventory_qty -= self.ask_sizes * execute_sell
-        self.quote += self.asks * self.ask_sizes * execute_sell
-        # logging.debug(
-        #     f"limit sell: {execute_sell}, qty: {self.ask_sizes}, price: {self.asks * self.ask_sizes}"
-        # )
+            self.asks - self.mid_price[self.current_step]
+        ) * execute_sell_size
+        self.inventory_qty -= execute_sell_size
+        self.quote += self.asks * execute_sell_size
         self.asks = self.asks * (1 - execute_sell)
         self.ask_sizes = self.ask_sizes * (1 - execute_sell)
-        self.trade_limit += execute_buy + execute_sell
+
+        # if self.record_values:
+        #     self.limit_buy.append(execute_buy)
+        #     self.limit_sell.append(execute_sell)
+
+        # self.trade_limit += np.where(execute_buy_size != 0, 1, 0) + np.where(
+        #     execute_sell_size != 0, 1, 0
+        # )
         self.spread += sell_spread + buy_spread
 
     def _get_observation(self):
-        import time
-
         # logging.debug(
         #     f"inventory: {self.inventory_qty}, quote: {self.quote}, mid: {self.mid_price[self.current_step]}"
         # )
@@ -414,9 +432,65 @@ class MMVecEnv(gym.Env):
             bid,
             ask,
         )
-        # logging.debug(
-        #     f"Applied: bid: {self.bid_sizes}@{bid}, ask: {self.ask_sizes}@{ask}"
-        # )
+        if self.record_values:
+            trading_bid = np.where(bid_size != 0, 1, 0)
+            trading_bid_limit = trading_bid * (action[:, 2] < 0)
+            trading_bid_market = trading_bid * (action[:, 2] >= 0)
+            trading_bid_limit_hit = trading_bid_limit * (
+                self.bids >= self.low_price[self.current_step]
+            )
+            trading_bid_limit_volume = trading_bid_limit_hit * self.bid_sizes
+            trading_bid_market_volume = trading_bid_market * self.bid_sizes
+            trading_bid_limit_value = trading_bid_limit_volume * (
+                self.mid_price[self.current_step] - self.bids
+            )
+            trading_bid_market_value = -(
+                trading_bid_market_volume
+                * (self.best_ask[self.current_step] - self.mid_price[self.current_step])
+            )
+
+            self.trading_bid.append(trading_bid)
+            self.trading_bid_type.append(trading_bid_limit)
+            self.trading_bid_hit.append(trading_bid_limit_hit)
+            self.trading_bid_limit_volume.append(trading_bid_limit_volume)
+            self.trading_bid_market_volume.append(trading_bid_market_volume)
+            self.trading_bid_limit_value.append(trading_bid_limit_value)
+            self.trading_bid_market_value.append(trading_bid_market_value)
+
+            # print(f"trading bid: {trading_bid}")
+            # print(f"trading_bid_limit: {trading_bid_limit}")
+            # print(f"trading_bid_limit_hit: {trading_bid_limit_hit}")
+            # print(f"trading_bid_limit_value: {trading_bid_limit_value}")
+            # print(f"trading_bid_market_value: {trading_bid_market_value}")
+
+            trading_ask = ask_size.astype(bool)
+            trading_ask_limit = trading_ask * (action[:, 3] > 0)
+            trading_ask_market = trading_ask * (action[:, 3] <= 0)
+            trading_ask_limit_hit = trading_ask_limit * (
+                self.asks <= self.high_price[self.current_step]
+            )
+            trading_ask_limit_volume = trading_ask_limit_hit * self.ask_sizes
+            trading_ask_market_volume = trading_ask_market * self.ask_sizes
+            trading_ask_limit_value = trading_ask_limit_volume * (
+                self.asks - self.mid_price[self.current_step]
+            )
+            trading_ask_market_value = -(
+                trading_ask_market_volume
+                * (self.mid_price[self.current_step] - self.best_bid[self.current_step])
+            )
+
+            self.trading_ask.append(trading_ask)
+            self.trading_ask_type.append(trading_ask_limit)
+            self.trading_ask_hit.append(trading_ask_limit_hit)
+            self.trading_ask_limit_value.append(trading_ask_limit_value)
+            self.trading_ask_market_value.append(trading_ask_market_value)
+            self.trading_ask_limit_volume.append(trading_ask_limit_volume)
+            self.trading_ask_market_volume.append(trading_ask_market_volume)
+            # print(f"trading ask: {trading_ask}")
+            # print(f"trading_ask_limit: {trading_ask_limit}")
+            # print(f"trading_ask_limit_hit: {trading_ask_limit_hit}")
+            # print(f"trading_ask_limit_value: {trading_ask_limit_value}")
+            # print(f"trading_ask_market_value: {trading_ask_market_value}")
 
     def _get_value(self):
         """
@@ -434,8 +508,22 @@ class MMVecEnv(gym.Env):
             "values": self.values,
             "inventory_values": self.inventory_values,
             "inventory_qty": self.inventory_qty_values,
-            "market_trades": self.trade_market,
-            "limit_trades": self.trade_limit,
+            # bid related
+            "trading_bid": self.trading_bid,
+            "trading_bid_type": self.trading_bid_type,
+            "trading_bid_hit": self.trading_bid_hit,
+            "trading_bid_limit_value": self.trading_bid_limit_value,
+            "trading_bid_market_value": self.trading_bid_market_value,
+            "trading_bid_limit_volume": self.trading_bid_limit_volume,
+            "trading_bid_market_volume": self.trading_bid_market_volume,
+            # ask related
+            "trading_ask": self.trading_ask,
+            "trading_ask_type": self.trading_ask_type,
+            "trading_ask_hit": self.trading_ask_hit,
+            "trading_ask_limit_value": self.trading_ask_limit_value,
+            "trading_ask_market_value": self.trading_ask_market_value,
+            "trading_ask_limit_volume": self.trading_ask_limit_volume,
+            "trading_ask_market_volume": self.trading_ask_market_volume,
         }
 
     def get_recorded_values_to_df(self):
@@ -473,10 +561,36 @@ class MMVecEnv(gym.Env):
             "sharpe": sharpe,
             "drawdown": drawdown,
             "trades": trades,
+            # "limit_trades": self.trade_limit,
+            # "market_trades": self.trade_market,
             "max_inventory": max_inventory,
             "mean_abs_inv": np.mean(np.abs(self.inventory_values), axis=0),
+            # bid
+            "bid_trade_count": np.sum(self.trading_bid, axis=0),
+            "bid_limit_count": np.sum(self.trading_bid_type, axis=0),
+            "bid_limit_hit_count": np.sum(self.trading_bid_hit, axis=0),
+            "bid_limit_value": np.sum(self.trading_bid_limit_value, axis=0),
+            "bid_market_value": np.sum(self.trading_bid_market_value, axis=0),
+            "bid_limit_volume": np.sum(self.trading_bid_limit_volume, axis=0),
+            "bid_market_volume": np.sum(self.trading_bid_market_volume, axis=0),
+            # ask
+            "ask_trade_count": np.sum(self.trading_ask, axis=0),
+            "ask_limit_count": np.sum(self.trading_ask_type, axis=0),
+            "ask_limit_hit_count": np.sum(self.trading_ask_hit, axis=0),
+            "ask_limit_value": np.sum(self.trading_ask_limit_value, axis=0),
+            "ask_market_value": np.sum(self.trading_ask_market_value, axis=0),
+            "ask_limit_volume": np.sum(self.trading_ask_limit_volume, axis=0),
+            "ask_market_volume": np.sum(self.trading_ask_market_volume, axis=0),
         }
         return values
+
+    def get_metrics_single(self):
+        assert self.n_envs == 1, "Only implemented for n_envs = 1"
+        metrics = self.get_metrics()
+        for k, v in metrics.items():
+            new_val = _check_nested_array(v)
+            metrics[k] = new_val  # or whatever you want to do with iterable items
+        return metrics
 
     def get_metrics_val(self):
         if self.n_envs != 1:
@@ -514,6 +628,34 @@ class MMVecEnv(gym.Env):
         self.inventory_qty_values = []
         self.trade_market = np.zeros(self.n_envs)
         self.trade_limit = np.zeros(self.n_envs)
+
+        self.limit_buy = []
+        self.limit_sell = []
+        self.market_buy = []
+        self.market_sell = []
+
+        self.trading_bid = []
+        self.trading_bid_type = []
+        self.trading_bid_hit = []
+        self.trading_bid_limit_value = []
+        self.trading_bid_market_value = []
+        self.trading_bid_limit_volume = []
+        self.trading_bid_market_volume = []
+
+        self.trading_ask = []
+        self.trading_ask_type = []
+        self.trading_ask_hit = []
+        self.trading_ask_limit_value = []
+        self.trading_ask_market_value = []
+        self.trading_ask_limit_volume = []
+        self.trading_ask_market_volume = []
+
+
+def _check_nested_array(maybe_arr):
+    if isinstance(maybe_arr, np.ndarray):
+        return _check_nested_array(maybe_arr[0])
+    else:
+        return maybe_arr
 
 
 class SBMMVecEnv(VecEnv):

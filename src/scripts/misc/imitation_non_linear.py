@@ -1,3 +1,8 @@
+"""
+Tests if PPO can replicate a non-linear policy even with a smaller network
+It can
+"""
+
 import gym
 from gym import spaces
 import numpy as np

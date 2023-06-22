@@ -261,76 +261,76 @@ def _compare(price, size):
     print(f"rss calc: {rss1}, rss est: {rss2}, calculated is better: {rss1 < rss2}")
 
 
-def test_original():
-    """
-    Seems that using cov and var gives better fitting estimations than using curve fit
-    """
-    data = pd.read_csv(
-        "/Users/juusoahlroos/Documents/own/gradu/csv_parser/test_data.csv"
-    )
-    price_levels = data["price"].values
-    size = data["size"].values
-    _compare(price_levels, size)
+# def test_original():
+#     """
+#     Seems that using cov and var gives better fitting estimations than using curve fit
+#     """
+#     data = pd.read_csv(
+#         "/Users/juusoahlroos/Documents/own/gradu/csv_parser/test_data.csv"
+#     )
+#     price_levels = data["price"].values
+#     size = data["size"].values
+#     _compare(price_levels, size)
 
 
-def test_no_tail(last_rows):
-    """
-    Curve fit and cov/var give similar results when using fewer rows
-    more rows seem to give better results for cov/var
-    Curve fit weights the first obs more heavily?
-    """
-    data = pd.read_csv(
-        "/Users/juusoahlroos/Documents/own/gradu/csv_parser/test_data.csv"
-    )
-    # only use last 100 rows
-    data = data.tail(last_rows)
+# def test_no_tail(last_rows):
+#     """
+#     Curve fit and cov/var give similar results when using fewer rows
+#     more rows seem to give better results for cov/var
+#     Curve fit weights the first obs more heavily?
+#     """
+#     data = pd.read_csv(
+#         "/Users/juusoahlroos/Documents/own/gradu/csv_parser/test_data.csv"
+#     )
+#     # only use last 100 rows
+#     data = data.tail(last_rows)
 
-    price_levels = data["price"].values
-    size = data["size"].values
-    _compare(price_levels, size)
-
-
-def test_reverse_data():
-    """
-    Reversing data has no effect on the results
-    """
-    data = pd.read_csv(
-        "/Users/juusoahlroos/Documents/own/gradu/csv_parser/test_data.csv"
-    )
-    data = data.iloc[::-1]
-    price_levels = data["price"].values
-    size = data["size"].values
-    _compare(price_levels, size)
+#     price_levels = data["price"].values
+#     size = data["size"].values
+#     _compare(price_levels, size)
 
 
-def test_duplicate_obs(dup_count, dup_rows):
-    """
-    Duplicating first rows affects the results but not significantly
-    """
-    data = pd.read_csv(
-        "/Users/juusoahlroos/Documents/own/gradu/csv_parser/test_data.csv"
-    )
-    data = data.iloc[::-1]
-
-    # duplicate first 10 obs and add to data
-    for i in range(dup_count):
-        data = pd.concat([data.head(dup_rows), data], ignore_index=True)
-    price_levels = data["price"].values
-    size = data["size"].values
-    _compare(price_levels, size)
+# def test_reverse_data():
+#     """
+#     Reversing data has no effect on the results
+#     """
+#     data = pd.read_csv(
+#         "/Users/juusoahlroos/Documents/own/gradu/csv_parser/test_data.csv"
+#     )
+#     data = data.iloc[::-1]
+#     price_levels = data["price"].values
+#     size = data["size"].values
+#     _compare(price_levels, size)
 
 
-if __name__ == "__main__":
-    # total_rows = len(
-    #     pd.read_csv("/Users/juusoahlroos/Documents/own/gradu/csv_parser/test_data.csv")
-    # )
-    # for i in range(10, 110, 10):
-    #     print(f"last {i} rows")
-    #     test_no_tail(i)
-    #     print("")
-    # test_no_tail(total_rows)
-    # test_reverse_data()
-    # test_duplicate_obs(200, 1)
+# def test_duplicate_obs(dup_count, dup_rows):
+#     """
+#     Duplicating first rows affects the results but not significantly
+#     """
+#     data = pd.read_csv(
+#         "/Users/juusoahlroos/Documents/own/gradu/csv_parser/test_data.csv"
+#     )
+#     data = data.iloc[::-1]
 
-    # just using the first 10 obs seems to be producing the closest results
-    test_no_tail(10)
+#     # duplicate first 10 obs and add to data
+#     for i in range(dup_count):
+#         data = pd.concat([data.head(dup_rows), data], ignore_index=True)
+#     price_levels = data["price"].values
+#     size = data["size"].values
+#     _compare(price_levels, size)
+
+
+# if __name__ == "__main__":
+#     # total_rows = len(
+#     #     pd.read_csv("/Users/juusoahlroos/Documents/own/gradu/csv_parser/test_data.csv")
+#     # )
+#     # for i in range(10, 110, 10):
+#     #     print(f"last {i} rows")
+#     #     test_no_tail(i)
+#     #     print("")
+#     # test_no_tail(total_rows)
+#     # test_reverse_data()
+#     # test_duplicate_obs(200, 1)
+
+#     # just using the first 10 obs seems to be producing the closest results
+#     test_no_tail(10)

@@ -13,7 +13,7 @@ import argparse
 from src.scripts.timing import profile_expert, profile_learning
 from src.scripts.cloning import create_cloned_models
 from src.scripts.tuning import tune_config, tune_override
-from src.scripts.testing import rolling_test_train
+from src.scripts.testing import rolling_test_train, rolling_train_test_as
 from src.scripts.research import create_model_decision_grid
 
 
@@ -26,6 +26,7 @@ if __name__ == "__main__":
         "create_cloned_models": create_cloned_models,
         "rolling_test_train": rolling_test_train,
         "decision_grid": create_model_decision_grid,
+        "test_as": rolling_train_test_as,
     }
 
     parser = argparse.ArgumentParser(description="Choose profiling method.")

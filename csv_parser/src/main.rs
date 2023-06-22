@@ -303,6 +303,7 @@ fn parse_data(redo: bool, interim: bool, base: bool) {
     let append = !redo;
     let mut base_file = OpenOptions::new()
         .write(true)
+        .create(true)
         .append(append)
         .open(target_base.clone())
         .unwrap();
@@ -312,6 +313,7 @@ fn parse_data(redo: bool, interim: bool, base: bool) {
 
     let mut interim_file = OpenOptions::new()
         .write(true)
+        .create(true)
         .append(append)
         .open(target_interim)
         .unwrap();
@@ -376,6 +378,7 @@ fn parse_data(redo: bool, interim: bool, base: bool) {
     println!("update_files: {:?}", update_files.len());
     println!("trade_files: {:?}", trade_files.len());
     println!("mid price: {:?}", order_book.get_midprice());
+    println!("trade files: {:?}", trade_files.len());
 
     let mut update_handler: FileHandler = FileHandler::new(update_files, update_headers, true);
     let mut trade_handler: FileHandler = FileHandler::new(trade_files, trade_header, false);
@@ -383,6 +386,13 @@ fn parse_data(redo: bool, interim: bool, base: bool) {
     if !redo {
         // rewind order book to match the last timestamp
     }
+
+    // let mut n = 0;
+    // loop {
+    //     println!("n: {}", n);
+    //     trade_handler.next();
+    //     n += 1;
+    // }
 
     parse_both_records(
         first_ts,
@@ -410,5 +420,5 @@ fn main() {
     // let last_file = current_files.last().unwrap();
     // let first_ts = get_first_timestamp(&last_file, 0);
     // println!("first_ts: {:?}", first_ts);
-    parse_data(true, false, true);
+    parse_data(true, true, true);
 }
